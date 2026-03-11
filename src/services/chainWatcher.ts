@@ -137,7 +137,10 @@ export class ERC8004Watcher {
       if (this.lastBlock === 0) { this.lastBlock = latest - BLOCKS_PER_POLL }
 
       const fromBlock = this.lastBlock + 1
-      const toBlock   = Math.min(latest, fromBlock + BLOCKS_PER_POLL - 1)
+      // Always scan up to the latest block — registration events are rare
+      // and must never be missed. BSC now produces ~33 blocks per 15 s,
+      // so a fixed BLOCKS_PER_POLL cap would cause permanent lag.
+      const toBlock = latest
       if (fromBlock > toBlock) return
 
       // ERC-721 Transfer where from == address(0) → new mint = new agent registration
@@ -292,7 +295,10 @@ export class ChainWatcher {
       if (this.lastBlock === 0) { this.lastBlock = latest - BLOCKS_PER_POLL }
 
       const fromBlock = this.lastBlock + 1
-      const toBlock   = Math.min(latest, fromBlock + BLOCKS_PER_POLL - 1)
+      // Scan all blocks up to latest — BSC 450 ms/block means ~33 new blocks
+      // per 15 s poll interval. A fixed BLOCKS_PER_POLL cap would leave the
+      // watcher permanently behind. DeFi event handlers already slice results.
+      const toBlock = latest
 
       if (fromBlock > toBlock) return
 
