@@ -2,20 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Base resets (these apply even before Tailwind processes) ─────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0;
   overflow: hidden;
-  background: #0D1117;
-  /* Ensure text is visible on dark background without relying on Tailwind */
-  color: #E6EDF3;
+  background: #050810;
+  color: #E2E8F8;
 }
 
 body {
@@ -24,17 +19,150 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar styling ─────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #30363D; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #484F58; }
+::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,191,255,0.35); }
 
-/* ── Phaser canvas ───────────────────────────────────────────── */
+/* ── Phaser canvas ────────────────────────────────────────────────────────── */
 canvas { display: block; outline: none; }
 
-/* ── Ensure panels fill their containers ───────────────────── */
+/* ── Panels ───────────────────────────────────────────────────────────────── */
 aside, main { display: flex; flex-direction: column; }
-
-/* ── Prevent text selection on UI chrome ───────────────────── */
 aside { user-select: none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+@keyframes border-glow {
+  0%, 100% { border-color: rgba(0,191,255,0.22); box-shadow: 0 0 6px rgba(0,191,255,0.08); }
+  50%       { border-color: rgba(0,191,255,0.50); box-shadow: 0 0 14px rgba(0,191,255,0.22); }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes data-flicker {
+  0%, 97%, 100% { opacity: 1; }
+  98%           { opacity: 0.4; }
+  99%           { opacity: 0.9; }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes logo-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HUD UTILITY CLASSES
+══════════════════════════════════════════════════════════════════════════ */
+
+.hud-panel {
+  background: rgba(5, 10, 24, 0.94);
+  border: 1px solid rgba(0, 191, 255, 0.18);
+  box-shadow: 0 0 24px rgba(0, 191, 255, 0.04), inset 0 1px 0 rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+}
+
+.hud-text-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-glow-cyan   { color: #00CFFF; text-shadow: 0 0 10px rgba(0,207,255,0.7); }
+.hud-glow-green  { color: #00FF94; text-shadow: 0 0 10px rgba(0,255,148,0.7); }
+.hud-glow-gold   { color: #F0B90B; text-shadow: 0 0 10px rgba(240,185,11,0.6); }
+.hud-glow-purple { color: #BD93F9; text-shadow: 0 0 10px rgba(189,147,249,0.6); }
+
+.hud-section-label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(0, 191, 255, 0.55);
+}
+
+.hud-stat-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(0,191,255,0.07) 0%, rgba(0,0,0,0) 70%);
+  border: 1px solid rgba(0,191,255,0.15);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.hud-stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,191,255,0.55), transparent);
+}
+.hud-stat-card:hover {
+  border-color: rgba(0,191,255,0.42);
+  box-shadow: 0 0 14px rgba(0,191,255,0.14);
+}
+
+/* Scanline overlay on map */
+.hud-scanlines {
+  pointer-events: none;
+  position: absolute; inset: 0; z-index: 10;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0,0,0,0.06) 3px,
+    rgba(0,0,0,0.06) 4px
+  );
+}
+
+/* Moving scan beam */
+.hud-scan-beam {
+  pointer-events: none;
+  position: absolute; left: 0; right: 0; z-index: 11;
+  height: 80px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0,191,255,0.015) 35%,
+    rgba(0,191,255,0.030) 50%,
+    rgba(0,191,255,0.015) 65%,
+    transparent 100%
+  );
+  animation: scanline 7s linear infinite;
+}
+
+/* Corner decorators */
+.hud-corner {
+  position: absolute;
+  width: 10px; height: 10px;
+  pointer-events: none;
+}
+.hud-corner-tl { top: 0; left: 0;  border-top: 2px solid rgba(0,191,255,0.55); border-left: 2px solid rgba(0,191,255,0.55); }
+.hud-corner-tr { top: 0; right: 0; border-top: 2px solid rgba(0,191,255,0.55); border-right: 2px solid rgba(0,191,255,0.55); }
+.hud-corner-bl { bottom: 0; left: 0;  border-bottom: 2px solid rgba(0,191,255,0.55); border-left: 2px solid rgba(0,191,255,0.55); }
+.hud-corner-br { bottom: 0; right: 0; border-bottom: 2px solid rgba(0,191,255,0.55); border-right: 2px solid rgba(0,191,255,0.55); }
+
+.hud-event-entry {
+  animation: slide-in-right 0.22s ease-out both;
+}
+
+.hud-flicker {
+  animation: data-flicker 9s ease-in-out infinite;
+}
+
+.hud-border-animate {
+  animation: border-glow 3.5s ease-in-out infinite;
+}
