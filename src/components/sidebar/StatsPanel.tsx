@@ -15,9 +15,9 @@ const NETWORK_OPTIONS = [
 ] as const
 
 function NetworkSelector() {
-  const networkMode   = useGardenStore(s => s.networkMode)
-  const setNetworkMode = useGardenStore(s => s.setNetworkMode)
-  const chainStatus   = useGardenStore(s => s.chainStatus)
+  const networkMode    = useGardenStore(s => s.networkMode)
+  const switchNetwork  = useGardenStore(s => s.switchNetwork)
+  const chainStatus    = useGardenStore(s => s.chainStatus)
   const statusCfg     = STATUS_CONFIG[chainStatus]
 
   return (
@@ -41,7 +41,7 @@ function NetworkSelector() {
           return (
             <button
               key={opt.value}
-              onClick={() => setNetworkMode(opt.value)}
+              onClick={() => switchNetwork(opt.value)}
               title={`Switch to BSC ${opt.label}`}
               className="hud-text-mono"
               style={{

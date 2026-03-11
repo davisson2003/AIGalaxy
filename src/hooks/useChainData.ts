@@ -94,12 +94,8 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
   const incrementActivities = useGardenStore(s => s.incrementActivities)
   const setChainStatus      = useGardenStore(s => s.setChainStatus)
   const setRpcEndpoint      = useGardenStore(s => s.setRpcEndpoint)
-  const resetState          = useGardenStore(s => s.resetState)
 
   useEffect(() => {
-    // Always clear stale agents / feed when the network changes
-    resetState(networkMode)
-
     // Mock mode: skip RPC entirely, simulation hook handles events
     if (!enabled || networkMode === 'mock') {
       if (networkMode === 'mock') {

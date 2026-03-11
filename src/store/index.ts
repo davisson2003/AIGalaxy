@@ -3,12 +3,25 @@ import type { Agent, Territory, FeedEvent, AgentMessage } from '@/types'
 import { generateAgents } from '@/services/mockData'
 import type { ProviderStatus } from '@/services/rpc'
 
+type NetworkMode = 'mainnet' | 'testnet' | 'mock'
+
+/** Snapshot of transient data cached per network */
+interface NetworkSnapshot {
+  agents: Agent[]
+  feedEvents: FeedEvent[]
+  totalMessages: number
+  totalActivities: number
+}
+
 interface GardenState {
   // Data
   agents: Agent[]
   feedEvents: FeedEvent[]
   totalMessages: number
   totalActivities: number
+
+  // Per-network state cache (survives network switches)
+  networkCache: Partial<Record<NetworkMode, NetworkSnapshot>>
 
   // Selection
   selectedAgentId: number | null
@@ -19,7 +32,7 @@ interface GardenState {
   rpcEndpoint: string | null
 
   // Network mode selection
-  networkMode: 'mainnet' | 'testnet' | 'mock'
+  networkMode: NetworkMode
 
   // Actions — data
   setAgents: (agents: Agent[]) => void
@@ -38,9 +51,15 @@ interface GardenState {
   // Actions — chain
   setChainStatus: (status: ProviderStatus) => void
   setRpcEndpoint: (endpoint: string) => void
-  setNetworkMode: (mode: 'mainnet' | 'testnet' | 'mock') => void
-  /** Clear all transient state when switching networks */
-  resetState: (mode: 'mainnet' | 'testnet' | 'mock') => void
+  setNetworkMode: (mode: NetworkMode) => void
+  /**
+   * Switch to a new network:
+   *   1. Saves current agents/feed/counters into networkCache[currentMode]
+   *   2. Restores cached state for the new mode (or initialises defaults on
+   *      first visit)
+   * Watchers then diff-merge new on-chain data on top of the restored state.
+   */
+  switchNetwork: (mode: NetworkMode) => void
 
   // Computed helpers
   getAgent: (id: number) => Agent | undefined
@@ -52,6 +71,7 @@ export const useGardenStore = create<GardenState>((set, get) => ({
   feedEvents: [],
   totalMessages: 0,
   totalActivities: 0,
+  networkCache: {},
   selectedAgentId: null,
   selectedTerritoryId: null,
 
@@ -85,16 +105,35 @@ export const useGardenStore = create<GardenState>((set, get) => ({
   setRpcEndpoint: (rpcEndpoint) => set({ rpcEndpoint }),
   setNetworkMode: (networkMode) => set({ networkMode }),
 
-  resetState: (mode) => set({
-    // In mock mode re-generate the 28 starter agents; in live modes start empty
-    // (real agents arrive via ERC-8004 discovery; mock heartbeat targets them)
-    agents:            mode === 'mock' ? generateAgents(28) : [],
-    feedEvents:        [],
-    totalMessages:     0,
-    totalActivities:   0,
-    selectedAgentId:   null,
-    selectedTerritoryId: null,
-  }),
+  switchNetwork: (mode) => {
+    const s = get()
+    if (s.networkMode === mode) return   // no-op if same network
+
+    // 1. Persist current state into the cache slot for the outgoing network
+    const updatedCache: Partial<Record<NetworkMode, NetworkSnapshot>> = {
+      ...s.networkCache,
+      [s.networkMode]: {
+        agents:          s.agents,
+        feedEvents:      s.feedEvents,
+        totalMessages:   s.totalMessages,
+        totalActivities: s.totalActivities,
+      },
+    }
+
+    // 2. Load cached state for the incoming network, or build fresh defaults
+    const cached = updatedCache[mode]
+    const freshAgents = mode === 'mock' ? generateAgents(28) : []
+    set({
+      networkMode:         mode,
+      networkCache:        updatedCache,
+      agents:              cached?.agents          ?? freshAgents,
+      feedEvents:          cached?.feedEvents       ?? [],
+      totalMessages:       cached?.totalMessages    ?? 0,
+      totalActivities:     cached?.totalActivities  ?? 0,
+      selectedAgentId:     null,
+      selectedTerritoryId: null,
+    })
+  },
 
   getAgent: (id) => get().agents.find(a => a.id === id),
   getAgentsInTerritory: (id) => get().agents.filter(a => a.territory === id),
