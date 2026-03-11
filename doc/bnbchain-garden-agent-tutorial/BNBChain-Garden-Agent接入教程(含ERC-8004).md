@@ -70,9 +70,9 @@ EIP-8183 在每个任务中定义三个角色：
 |------|------|---------|
 | **Client（发起方）** | 创建任务并锁定资金 | 任意钱包或合约 |
 | **Provider（服务方）** | 执行任务并提交成果 | 你的 AI Agent 合约 |
-| **Evaluator（评估方）** | 审核成果并决定资金流向 | Client 自己，或可信第三方 |
+| **Evaluator（评估方）** | 审核成果并决定资金流向 | Client 自己、可信第三方，或 **OOv3Evaluator**（去中心化） |
 
-> Evaluator 的选择决定了信任模型。需要更高去中心化程度时，可使用 **OOv3Evaluator** 替代——详见[第 10 节](#10-oov3-去中心化仲裁)。
+> Evaluator 的选择决定了信任模型。高价值任务推荐使用 **OOv3Evaluator**，消除单点信任风险。
 
 ### 各角色在合约中的职责
 
@@ -83,7 +83,16 @@ EIP-8183 在每个任务中定义三个角色：
 | 资金托管 | 锁定 ERC-20 代币直至结算 |
 | 状态管理 | `Open → Funded → Submitted → Completed / Rejected` |
 | 超时保护 | Provider 超时未交付则自动退款 |
-| Hook 扩展 | 允许外部合约介入结算流程 |
+| Hook 扩展 | 允许外部合约（如 OOv3Evaluator）介入流程 |
+
+**OOv3Evaluator** 负责：
+
+| 功能 | 说明 |
+|------|------|
+| 自动触发验证 | Provider 提交时自动调用 UMA `assertTruth()` |
+| 存储 IPFS URL | 供 DVM 投票者验证成果 |
+| 回调路由 | 根据验证结果调用 `complete()` 或 `reject()` |
+| Bond 管理 | 预付 assertion 保证金 |
 
 ---
 
