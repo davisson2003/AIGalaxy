@@ -78,7 +78,7 @@ interface GardenState {
 export const useGardenStore = create<GardenState>()(
   persist(
     (set, get) => ({
-      agents:          generateAgents(28),
+      agents:          [],
       feedEvents:      [],
       totalMessages:   0,
       totalActivities: 0,
@@ -88,7 +88,7 @@ export const useGardenStore = create<GardenState>()(
 
       chainStatus:  'connecting',
       rpcEndpoint:  null,
-      networkMode:  'mock',
+      networkMode:  'mainnet',
 
       setAgents: (agents) => set({ agents }),
 
