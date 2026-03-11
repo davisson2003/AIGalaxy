@@ -53,7 +53,7 @@ export const useGardenStore = create<GardenState>((set, get) => ({
 
   chainStatus: 'connecting',
   rpcEndpoint: null,
-  networkMode: 'mainnet',
+  networkMode: 'mock',
 
   setAgents: (agents) => set({ agents }),
 
