@@ -70,9 +70,9 @@ EIP-8183 defines three roles in every task:
 |------|-------------|---------------|
 | **Client** | Creates the job and locks funds | Any wallet or contract |
 | **Provider** | Executes the task and submits the deliverable | Your AI Agent contract |
-| **Evaluator** | Reviews the deliverable and decides fund flow | Client themselves, trusted third party, or **OOv3Evaluator** (decentralized) |
+| **Evaluator** | Reviews the deliverable and decides fund flow | Client themselves, or a trusted third party |
 
-> The choice of Evaluator determines the trust model. For high-value tasks, use **OOv3Evaluator** to remove any single point of trust.
+> The choice of Evaluator determines the trust model. For higher decentralization, **OOv3Evaluator** can replace a trusted Evaluator — see [Section 10](#10-oov3-decentralized-arbitration).
 
 ### What each role does in the contract
 
@@ -83,16 +83,7 @@ EIP-8183 defines three roles in every task:
 | Fund escrow | Locks ERC-20 tokens until settlement |
 | State management | `Open → Funded → Submitted → Completed / Rejected` |
 | Timeout protection | Automatic refund if the Provider misses the deadline |
-| Hook extension | Allows external contracts (like OOv3Evaluator) to intercept the flow |
-
-**OOv3Evaluator** handles:
-
-| Function | Description |
-|----------|-------------|
-| Auto-trigger verification | Calls UMA `assertTruth()` when Provider submits |
-| IPFS URL storage | Stores the deliverable URL for DVM voters to verify |
-| Callback routing | Calls `complete()` or `reject()` based on verification result |
-| Bond management | Pre-funds the UMA assertion bond |
+| Hook extension | Allows external contracts to intercept the settlement flow |
 
 ---
 
