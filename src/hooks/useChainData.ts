@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { createBscProvider } from '@/services/rpc'
+import { createBscProvider, type NetworkMode } from '@/services/rpc'
 import { ChainWatcher, type ChainEvent } from '@/services/chainWatcher'
 import { useGardenStore } from '@/store'
 import type { FeedEvent } from '@/types'
@@ -35,36 +35,45 @@ function chainEventToFeed(evt: ChainEvent): FeedEvent {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 /**
- * @param enabled  Pass `false` to skip initialisation (useful in tests / SSR).
+ * @param enabled      Pass `false` to skip initialisation (useful in tests / SSR).
+ * @param networkMode  Which network to connect to. Re-runs the effect when changed.
  */
-export function useChainData(enabled = true) {
+export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet') {
   const watcherRef = useRef<ChainWatcher | null>(null)
 
   const agents           = useGardenStore(s => s.agents)
   const agentsRef        = useRef(agents)
   agentsRef.current      = agents
 
-  const pushFeedEvent    = useGardenStore(s => s.pushFeedEvent)
-  const updateAgent      = useGardenStore(s => s.updateAgent)
-  const incrementMessages = useGardenStore(s => s.incrementMessages)
+  const pushFeedEvent       = useGardenStore(s => s.pushFeedEvent)
+  const updateAgent         = useGardenStore(s => s.updateAgent)
+  const incrementMessages   = useGardenStore(s => s.incrementMessages)
   const incrementActivities = useGardenStore(s => s.incrementActivities)
-  const setChainStatus   = useGardenStore(s => s.setChainStatus)
-  const setRpcEndpoint   = useGardenStore(s => s.setRpcEndpoint)
+  const setChainStatus      = useGardenStore(s => s.setChainStatus)
+  const setRpcEndpoint      = useGardenStore(s => s.setRpcEndpoint)
 
   useEffect(() => {
-    if (!enabled) return
+    // Mock mode: skip RPC entirely, simulation hook handles events
+    if (!enabled || networkMode === 'mock') {
+      if (networkMode === 'mock') {
+        setChainStatus('error')   // reuse 'error' state → shows MOCK badge
+        setRpcEndpoint('')
+      }
+      return
+    }
 
     let cancelled = false
 
     const init = async () => {
       setChainStatus('connecting')
+      setRpcEndpoint('')
 
       try {
-        const { provider, endpoint, blockNumber } = await createBscProvider()
+        const { provider, endpoint, blockNumber } = await createBscProvider(networkMode)
 
         if (cancelled) return
 
-        console.log(`[useChainData] Connected to ${endpoint} at block ${blockNumber}`)
+        console.log(`[useChainData] Connected to ${endpoint} (${networkMode}) at block ${blockNumber}`)
         setChainStatus('connected')
         setRpcEndpoint(endpoint)
 
@@ -72,11 +81,9 @@ export function useChainData(enabled = true) {
           if (cancelled) return
 
           for (const evt of events) {
-            // Push to feed
             pushFeedEvent(chainEventToFeed(evt))
             incrementActivities()
 
-            // Pick a random agent in the same territory and bump rep
             const localAgents = agentsRef.current.filter(a => a.territory === evt.territory)
             if (localAgents.length > 0) {
               const target = localAgents[Math.floor(Math.random() * localAgents.length)]
@@ -94,9 +101,8 @@ export function useChainData(enabled = true) {
 
       } catch (err) {
         if (cancelled) return
-        console.warn('[useChainData] All RPC endpoints failed, staying in mock mode:', (err as Error).message)
+        console.warn(`[useChainData] ${networkMode} RPC failed, falling back to mock:`, (err as Error).message)
         setChainStatus('error')
-        // The simulation hook in App.tsx will continue providing mock events
       }
     }
 
@@ -107,5 +113,5 @@ export function useChainData(enabled = true) {
       watcherRef.current?.stop()
       watcherRef.current = null
     }
-  }, [enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, networkMode]) // eslint-disable-line react-hooks/exhaustive-deps
 }

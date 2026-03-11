@@ -18,6 +18,9 @@ interface GardenState {
   chainStatus: ProviderStatus
   rpcEndpoint: string | null
 
+  // Network mode selection
+  networkMode: 'mainnet' | 'testnet' | 'mock'
+
   // Actions — data
   setAgents: (agents: Agent[]) => void
   updateAgent: (id: number, patch: Partial<Agent>) => void
@@ -33,6 +36,7 @@ interface GardenState {
   // Actions — chain
   setChainStatus: (status: ProviderStatus) => void
   setRpcEndpoint: (endpoint: string) => void
+  setNetworkMode: (mode: 'mainnet' | 'testnet' | 'mock') => void
 
   // Computed helpers
   getAgent: (id: number) => Agent | undefined
@@ -49,6 +53,7 @@ export const useGardenStore = create<GardenState>((set, get) => ({
 
   chainStatus: 'connecting',
   rpcEndpoint: null,
+  networkMode: 'mainnet',
 
   setAgents: (agents) => set({ agents }),
 
@@ -67,6 +72,7 @@ export const useGardenStore = create<GardenState>((set, get) => ({
 
   setChainStatus: (chainStatus) => set({ chainStatus }),
   setRpcEndpoint: (rpcEndpoint) => set({ rpcEndpoint }),
+  setNetworkMode: (networkMode) => set({ networkMode }),
 
   getAgent: (id) => get().agents.find(a => a.id === id),
   getAgentsInTerritory: (id) => get().agents.filter(a => a.territory === id),

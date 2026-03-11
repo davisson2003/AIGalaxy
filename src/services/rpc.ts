@@ -16,7 +16,19 @@ export const BSC_RPC_ENDPOINTS = [
   'https://rpc.ankr.com/bsc',
 ]
 
+export const BSC_TESTNET_RPC_ENDPOINTS = [
+  // BNB Chain official testnet
+  'https://bsc-testnet.bnbchain.org',
+  'https://data-seed-prebsc-1-s1.bnbchain.org:8545/',
+  'https://data-seed-prebsc-2-s1.bnbchain.org:8545/',
+  // Public node
+  'https://bsc-testnet-rpc.publicnode.com',
+  // Ankr testnet
+  'https://rpc.ankr.com/bsc_testnet_chapel',
+]
+
 export type ProviderStatus = 'connecting' | 'connected' | 'error' | 'offline'
+export type NetworkMode = 'mainnet' | 'testnet' | 'mock'
 
 export interface RpcInfo {
   provider: ethers.JsonRpcProvider
@@ -30,30 +42,30 @@ export interface RpcInfo {
  * Times out after 4 s per attempt.
  */
 export async function createBscProvider(
+  network: NetworkMode = 'mainnet',
   customEndpoint?: string,
 ): Promise<RpcInfo> {
-  const endpoints = customEndpoint
-    ? [customEndpoint, ...BSC_RPC_ENDPOINTS]
-    : BSC_RPC_ENDPOINTS
+  const baseEndpoints = network === 'testnet' ? BSC_TESTNET_RPC_ENDPOINTS : BSC_RPC_ENDPOINTS
+  const endpoints = customEndpoint ? [customEndpoint, ...baseEndpoints] : baseEndpoints
+  const chainId = network === 'testnet' ? 97 : 56
 
   const errors: string[] = []
 
   for (const url of endpoints) {
     try {
       const provider = new ethers.JsonRpcProvider(url, undefined, {
-        staticNetwork: true,          // skip eth_chainId on every request
+        staticNetwork: true,
         polling: true,
         pollingInterval: 5000,
       })
 
-      // Verify connection with a timeout
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout')), 4000),
       )
       const blockNumber = await Promise.race([provider.getBlockNumber(), timeout])
 
-      console.log(`[RPC] Connected to ${url} at block ${blockNumber}`)
-      return { provider, endpoint: url, chainId: 56, blockNumber }
+      console.log(`[RPC] Connected to ${url} (chain ${chainId}) at block ${blockNumber}`)
+      return { provider, endpoint: url, chainId, blockNumber }
     } catch (err) {
       errors.push(`${url}: ${(err as Error).message}`)
       continue
@@ -61,6 +73,6 @@ export async function createBscProvider(
   }
 
   throw new Error(
-    `All BSC RPC endpoints failed:\n${errors.join('\n')}`,
+    `All BSC ${network} RPC endpoints failed:\n${errors.join('\n')}`,
   )
 }

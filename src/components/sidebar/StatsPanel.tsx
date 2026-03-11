@@ -8,37 +8,60 @@ const STATUS_CONFIG: Record<ProviderStatus, { dot: string; label: string; title:
   offline:    { dot: '#8B949E', label: 'OFFLINE',    title: 'No network' },
 }
 
-function ChainBadge() {
-  const status      = useGardenStore(s => s.chainStatus)
-  const rpcEndpoint = useGardenStore(s => s.rpcEndpoint)
-  const cfg         = STATUS_CONFIG[status]
+const NETWORK_OPTIONS = [
+  { value: 'mainnet', label: 'MAINNET', color: '#00FF94' },
+  { value: 'testnet', label: 'TESTNET', color: '#FFA657' },
+  { value: 'mock',    label: 'MOCK',    color: '#BD93F9' },
+] as const
 
-  const rpcLabel = rpcEndpoint
-    ? rpcEndpoint.replace('https://', '').split('/')[0]
-    : ''
+function NetworkSelector() {
+  const networkMode   = useGardenStore(s => s.networkMode)
+  const setNetworkMode = useGardenStore(s => s.setNetworkMode)
+  const chainStatus   = useGardenStore(s => s.chainStatus)
+  const statusCfg     = STATUS_CONFIG[chainStatus]
 
   return (
-    <div title={cfg.title + (rpcLabel ? ` (${rpcLabel})` : '')}
-      style={{
-        display:'flex', alignItems:'center', gap:5,
-        padding:'2px 7px', borderRadius:3,
-        background:`${cfg.dot}12`,
-        border:`1px solid ${cfg.dot}40`,
-        cursor:'default', userSelect:'none',
-      }}>
-      <span style={{
-        width:6, height:6, borderRadius:'50%',
-        background: cfg.dot,
-        boxShadow: `0 0 6px ${cfg.dot}, 0 0 12px ${cfg.dot}80`,
-        flexShrink:0,
-        animation: status === 'connecting' ? 'pulse 1.4s ease-in-out infinite' : 'none',
+    <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+      {/* Connection status dot */}
+      <span title={statusCfg.title} style={{
+        width:6, height:6, borderRadius:'50%', flexShrink:0,
+        background: statusCfg.dot,
+        boxShadow: `0 0 6px ${statusCfg.dot}, 0 0 10px ${statusCfg.dot}80`,
+        animation: chainStatus === 'connecting' ? 'pulse 1.4s ease-in-out infinite' : 'none',
       }}/>
-      <span className="hud-text-mono" style={{
-        fontSize:9, color:cfg.dot, fontWeight:700, letterSpacing:'0.12em',
-        textShadow:`0 0 6px ${cfg.dot}`,
+
+      {/* Segmented network selector */}
+      <div style={{
+        display:'flex', borderRadius:3,
+        border:'1px solid rgba(0,191,255,0.2)',
+        overflow:'hidden',
       }}>
-        {cfg.label}
-      </span>
+        {NETWORK_OPTIONS.map(opt => {
+          const active = networkMode === opt.value
+          return (
+            <button
+              key={opt.value}
+              onClick={() => setNetworkMode(opt.value)}
+              title={`Switch to BSC ${opt.label}`}
+              className="hud-text-mono"
+              style={{
+                padding:'2px 6px',
+                fontSize:8, fontWeight:700, letterSpacing:'0.1em',
+                border:'none', cursor:'pointer',
+                background: active ? `${opt.color}22` : 'transparent',
+                color: active ? opt.color : 'rgba(120,150,180,0.5)',
+                textShadow: active ? `0 0 6px ${opt.color}` : 'none',
+                borderRight: opt.value !== 'mock' ? '1px solid rgba(0,191,255,0.15)' : 'none',
+                transition:'all 0.18s',
+              }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.color = opt.color }}
+              onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'rgba(120,150,180,0.5)' }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -73,7 +96,7 @@ export default function StatsPanel() {
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
         <span className="hud-section-label">◈ NETWORK STATS</span>
-        <ChainBadge />
+        <NetworkSelector />
       </div>
 
       {/* Stat cards */}

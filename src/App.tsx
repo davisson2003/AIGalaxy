@@ -66,14 +66,16 @@ function MapFallback() {
 // map always looks animated even during quiet on-chain periods.
 function DataDriver() {
   const chainStatus = useGardenStore(s => s.chainStatus)
+  const networkMode = useGardenStore(s => s.networkMode)
 
-  // Always start chain data
-  useChainData(true)
+  // Connect to chain (or skip if mock mode). Re-connects when networkMode changes.
+  useChainData(networkMode !== 'mock', networkMode)
 
   // Run mock simulation:
-  //  - always while connecting/errored (sole data source)
-  //  - at reduced rate while connected (background heartbeat only)
-  useSimulation(chainStatus !== 'connected', chainStatus === 'connected')
+  //  - always in mock mode or while connecting/errored (sole data source)
+  //  - at reduced rate while live-connected (background heartbeat only)
+  const isMock = networkMode === 'mock'
+  useSimulation(isMock || chainStatus !== 'connected', !isMock && chainStatus === 'connected')
 
   return null
 }
