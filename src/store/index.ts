@@ -39,6 +39,8 @@ interface GardenState {
   setChainStatus: (status: ProviderStatus) => void
   setRpcEndpoint: (endpoint: string) => void
   setNetworkMode: (mode: 'mainnet' | 'testnet' | 'mock') => void
+  /** Clear all transient state when switching networks */
+  resetState: (mode: 'mainnet' | 'testnet' | 'mock') => void
 
   // Computed helpers
   getAgent: (id: number) => Agent | undefined
@@ -82,6 +84,17 @@ export const useGardenStore = create<GardenState>((set, get) => ({
   setChainStatus: (chainStatus) => set({ chainStatus }),
   setRpcEndpoint: (rpcEndpoint) => set({ rpcEndpoint }),
   setNetworkMode: (networkMode) => set({ networkMode }),
+
+  resetState: (mode) => set({
+    // In mock mode re-generate the 28 starter agents; in live modes start empty
+    // (real agents arrive via ERC-8004 discovery; mock heartbeat targets them)
+    agents:            mode === 'mock' ? generateAgents(28) : [],
+    feedEvents:        [],
+    totalMessages:     0,
+    totalActivities:   0,
+    selectedAgentId:   null,
+    selectedTerritoryId: null,
+  }),
 
   getAgent: (id) => get().agents.find(a => a.id === id),
   getAgentsInTerritory: (id) => get().agents.filter(a => a.territory === id),
