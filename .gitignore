@@ -1,1 +1,5 @@
 *.DS_Store
+
+# Local environment variables — contains API keys, never commit
+.env.local
+.env*.local

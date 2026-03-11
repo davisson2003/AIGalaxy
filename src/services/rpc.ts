@@ -1,11 +1,19 @@
 import { ethers } from 'ethers'
 
+// NodeReal MegaNode key — set VITE_NODEREAL_KEY in .env.local (never commit that file).
+// If the env var is absent the app falls back to free public endpoints automatically.
+const NODEREAL_KEY = import.meta.env.VITE_NODEREAL_KEY as string | undefined
+
 /**
- * Free public BSC Mainnet RPC endpoints, in priority order.
- * - No API key required for any of these.
- * - MegaNode (NodeReal) can also be used by registering a free key at nodereal.io.
+ * BSC Mainnet RPC endpoints, in priority order.
+ * NodeReal (if a key is configured) is tried first for better reliability.
+ * All other endpoints are free public nodes that require no API key.
  */
-export const BSC_RPC_ENDPOINTS = [
+export const BSC_RPC_ENDPOINTS: string[] = [
+  // NodeReal MegaNode — only included when VITE_NODEREAL_KEY is set
+  ...(NODEREAL_KEY
+    ? [`https://bsc-mainnet.nodereal.io/v1/${NODEREAL_KEY}`]
+    : []),
   // Binance official public RPC
   'https://bsc-dataseed.binance.org/',
   'https://bsc-dataseed1.defibit.io/',
