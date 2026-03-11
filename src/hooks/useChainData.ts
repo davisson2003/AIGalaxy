@@ -3,9 +3,10 @@
  *
  * React hook that:
  *  1. Connects to BSC via the best available free RPC (NodeReal MegaNode, Binance, Ankr…)
- *  2. Starts a ChainWatcher that polls getLogs every ~15 s
+ *  2. Starts a ChainWatcher (PancakeSwap / Venus / ListaDAO) for map animation only —
+ *     DeFi events update agent reputation but are NOT shown in the feed
  *  3. Starts an ERC8004Watcher that auto-discovers agents registered via BNBAgent SDK
- *  4. Maps real on-chain events → FeedEvent + agent updates in the Garden store
+ *  4. ERC-8004 events (registration + agent transfers) are pushed to the feed
  *  5. Exposes chainStatus so the UI can show a "live / mock" badge
  *
  * Falls back gracefully to mock simulation if ALL RPC endpoints are unreachable.
@@ -20,23 +21,11 @@ import {
 } from '@/services/chainWatcher'
 import { TERRITORY_MAP } from '@/constants/territories'
 import { useGardenStore } from '@/store'
-import type { Agent, FeedEvent } from '@/types'
+import type { Agent } from '@/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 let _eventCounter = 10_000   // unique IDs that don't clash with mock IDs
-
-function chainEventToFeed(evt: ChainEvent): FeedEvent {
-  return {
-    id: ++_eventCounter,
-    type: 'chain' as const,
-    timestamp: Date.now(),
-    label: evt.label,
-    color: evt.color,
-    territory: evt.territory,
-    txHash: evt.txHash,
-  }
-}
 
 /**
  * Convert a newly discovered ERC-8004 agent into a Garden Agent object.
@@ -121,18 +110,18 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
         setRpcEndpoint(endpoint)
 
         // ── 1. DeFi activity watcher (PancakeSwap / Venus / ListaDAO…) ──────
+        // Events are used only for map animation (reputation ticks on territory
+        // agents). They are NOT pushed to the feed — the feed only shows
+        // ERC-8004 agent events so the stream stays relevant.
         const onEvents = (events: ChainEvent[]) => {
           if (cancelled) return
           for (const evt of events) {
-            pushFeedEvent(chainEventToFeed(evt))
-            incrementActivities()
             const localAgents = agentsRef.current.filter(a => a.territory === evt.territory)
             if (localAgents.length > 0) {
               const target = localAgents[Math.floor(Math.random() * localAgents.length)]
               updateAgent(target.id, {
                 reputation: Math.min(target.reputation + evt.repDelta, 9999),
               })
-              incrementMessages()
             }
           }
         }
