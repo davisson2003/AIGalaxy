@@ -110,18 +110,50 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
         setRpcEndpoint(endpoint)
 
         // ── 1. DeFi activity watcher (PancakeSwap / Venus / ListaDAO…) ──────
-        // Events are used only for map animation (reputation ticks on territory
-        // agents). They are NOT pushed to the feed — the feed only shows
-        // ERC-8004 agent events so the stream stays relevant.
+        // Each event carries actorAddress (the wallet that triggered it).
+        // If that address matches a registered agent's tba, push to feed and
+        // boost that agent's reputation. Otherwise only tick a random territory
+        // agent's reputation for map animation — no feed entry.
         const onEvents = (events: ChainEvent[]) => {
           if (cancelled) return
           for (const evt of events) {
-            const localAgents = agentsRef.current.filter(a => a.territory === evt.territory)
-            if (localAgents.length > 0) {
-              const target = localAgents[Math.floor(Math.random() * localAgents.length)]
-              updateAgent(target.id, {
-                reputation: Math.min(target.reputation + evt.repDelta, 9999),
+            const actor = evt.actorAddress.toLowerCase()
+
+            // Check if the actor is a known registered agent
+            const matchedAgent = agentsRef.current.find(
+              a => a.tba?.toLowerCase() === actor
+            )
+
+            if (matchedAgent) {
+              // Known agent → show in feed with their name
+              pushFeedEvent({
+                id:        ++_eventCounter,
+                type:      'chain' as const,
+                timestamp: Date.now(),
+                label:     evt.label.replace(
+                  // Replace the short address in label with the agent name
+                  actor.slice(0, 6) + '…' + actor.slice(-4),
+                  matchedAgent.name,
+                ),
+                color:     evt.color,
+                territory: evt.territory,
+                txHash:    evt.txHash,
               })
+              incrementActivities()
+              updateAgent(matchedAgent.id, {
+                reputation:   Math.min(matchedAgent.reputation + evt.repDelta, 9999),
+                interactions: (matchedAgent.interactions ?? 0) + 1,
+                lastActive:   Date.now(),
+              })
+            } else {
+              // Unknown wallet → silent reputation tick for map animation only
+              const localAgents = agentsRef.current.filter(a => a.territory === evt.territory)
+              if (localAgents.length > 0) {
+                const target = localAgents[Math.floor(Math.random() * localAgents.length)]
+                updateAgent(target.id, {
+                  reputation: Math.min(target.reputation + evt.repDelta, 9999),
+                })
+              }
             }
           }
         }

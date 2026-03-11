@@ -303,6 +303,8 @@ export interface ChainEvent {
   txHash: string
   /** Block number */
   blockNumber: number
+  /** The wallet address that performed the action (sender / minter / borrower…) */
+  actorAddress: string
 }
 
 export type ChainEventCallback = (events: ChainEvent[]) => void
@@ -388,6 +390,7 @@ export class ChainWatcher {
             repDelta: Math.floor(Math.random() * 3) + 1,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: sender,
           })
         }
       }
@@ -403,6 +406,7 @@ export class ChainWatcher {
             repDelta: Math.floor(Math.random() * 4) + 2,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: minter,
           })
         }
       }
@@ -418,6 +422,7 @@ export class ChainWatcher {
             repDelta: Math.floor(Math.random() * 2) + 1,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: redeemer,
           })
         }
       }
@@ -433,6 +438,7 @@ export class ChainWatcher {
             repDelta: Math.floor(Math.random() * 5) + 3,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: borrower,
           })
         }
       }
@@ -440,13 +446,15 @@ export class ChainWatcher {
       // ── Venus repays ───────────────────────────────────────────────────────
       if (repayLogs.status === 'fulfilled') {
         for (const log of repayLogs.value.slice(0, 3)) {
+          const payer = `0x${log.topics[1]?.slice(26) ?? '0000'}`
           events.push({
             territory: 'venus',
-            label: `✅ Repay on Venus`,
+            label: `✅ Repay by ${short(payer)}`,
             color: '#86EFAC',
             repDelta: Math.floor(Math.random() * 3) + 2,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: payer,
           })
         }
       }
@@ -463,6 +471,7 @@ export class ChainWatcher {
             repDelta: Math.floor(Math.random() * 4) + 1,
             txHash: log.transactionHash,
             blockNumber: Number(log.blockNumber),
+            actorAddress: from,
           })
         }
       }
