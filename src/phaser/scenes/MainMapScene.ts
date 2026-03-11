@@ -222,20 +222,64 @@ export class MainMapScene extends Phaser.Scene {
 
   // ── Background & Static Layers ─────────────────────────────────────────────
 
+  // Helper: pointy-top hexagon vertex array
+  private getHexPoints(cx: number, cy: number, size: number): { x: number; y: number }[] {
+    const pts: { x: number; y: number }[] = []
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 6
+      pts.push({ x: cx + size * Math.cos(a), y: cy + size * Math.sin(a) })
+    }
+    return pts
+  }
+
   private drawBackground() {
     const { width, height } = this.scale
-    this.bgLayer.fillStyle(toPhaserColor(PALETTE.bg), 1)
+
+    // Deep-space base
+    this.bgLayer.fillStyle(0x070A14, 1)
     this.bgLayer.fillRect(0, 0, width, height)
+
+    // Nebula blobs — soft atmosphere patches
+    const nebulae: [number, number, number, number, number][] = [
+      [0.20, 0.30, 180, 0x1A1040, 0.55],
+      [0.75, 0.25, 150, 0x0A1828, 0.50],
+      [0.55, 0.65, 160, 0x101830, 0.45],
+      [0.30, 0.72, 120, 0x0F1A20, 0.40],
+      [0.82, 0.68, 110, 0x18102A, 0.40],
+    ]
+    for (const [fx, fy, r, col, alpha] of nebulae) {
+      this.bgLayer.fillStyle(col, alpha)
+      this.bgLayer.fillCircle(fx * width, fy * height, r)
+    }
+
+    // Deterministic star field (stable fractions — no jitter on resize)
+    const STARS: [number, number, number, number][] = [
+      [0.04,0.07,0.8,0.5],[0.13,0.21,0.6,0.35],[0.27,0.04,1.1,0.7],[0.37,0.17,0.7,0.4],
+      [0.51,0.02,0.9,0.6],[0.64,0.11,0.6,0.3],[0.76,0.06,1.0,0.65],[0.87,0.18,0.7,0.45],
+      [0.93,0.30,1.2,0.8],[0.82,0.41,0.6,0.35],[0.90,0.54,0.9,0.55],[0.84,0.67,0.7,0.4],
+      [0.75,0.78,1.1,0.7],[0.61,0.86,0.6,0.35],[0.47,0.91,0.8,0.5],[0.34,0.84,0.7,0.4],
+      [0.20,0.90,1.0,0.6],[0.08,0.81,0.6,0.35],[0.03,0.66,0.9,0.55],[0.01,0.51,0.7,0.4],
+      [0.06,0.37,0.8,0.5],[0.02,0.24,1.1,0.7],[0.17,0.34,0.6,0.35],[0.31,0.27,0.9,0.6],
+      [0.44,0.13,0.7,0.45],[0.56,0.24,0.8,0.5],[0.69,0.32,0.6,0.35],[0.79,0.27,1.0,0.65],
+      [0.71,0.53,0.7,0.4],[0.59,0.61,0.9,0.55],[0.42,0.56,0.6,0.35],[0.29,0.64,0.8,0.5],
+      [0.15,0.57,0.7,0.4],[0.24,0.43,1.1,0.7],[0.37,0.71,0.6,0.35],[0.52,0.77,0.9,0.6],
+      [0.66,0.71,0.7,0.45],[0.11,0.72,0.8,0.5],[0.88,0.77,0.6,0.35],[0.41,0.37,1.0,0.65],
+    ]
+    for (const [fx, fy, r, a] of STARS) {
+      this.bgLayer.fillStyle(0xFFFFFF, a)
+      this.bgLayer.fillCircle(fx * width, fy * height, r)
+    }
   }
 
   private drawGrid() {
     const { width, height } = this.scale
-    const size = 40
-    this.bgLayer.lineStyle(0.5, toPhaserColor(PALETTE.border), 0.3)
-    for (let x = 0; x < width; x += size)
-      this.bgLayer.strokeLineShape(new Phaser.Geom.Line(x, 0, x, height))
-    for (let y = 0; y < height; y += size)
-      this.bgLayer.strokeLineShape(new Phaser.Geom.Line(0, y, width, y))
+    const size = 55
+    for (let x = size; x < width; x += size) {
+      for (let y = size; y < height; y += size) {
+        this.bgLayer.fillStyle(0x3A4570, 0.22)
+        this.bgLayer.fillCircle(x, y, 0.9)
+      }
+    }
   }
 
   private drawRoads() {
@@ -243,78 +287,132 @@ export class MainMapScene extends Phaser.Scene {
     const hub = TERRITORIES[0]
     const hx = hub.cx * width, hy = hub.cy * height
     this.roadLayer.clear()
+
     for (let i = 1; i < TERRITORIES.length; i++) {
-      const t = TERRITORIES[i]
-      const tx = t.cx * width, ty = t.cy * height
+      const t     = TERRITORIES[i]
+      const tx    = t.cx * width, ty = t.cy * height
+      const color = toPhaserColor(t.color)
+
+      // Layer 1: wide outer glow
+      this.roadLayer.lineStyle(8, color, 0.04)
+      this.roadLayer.strokeLineShape(new Phaser.Geom.Line(hx, hy, tx, ty))
+
+      // Layer 2: mid glow
+      this.roadLayer.lineStyle(3, color, 0.12)
+      this.roadLayer.strokeLineShape(new Phaser.Geom.Line(hx, hy, tx, ty))
+
+      // Layer 3: dashed core line
       const dx = tx - hx, dy = ty - hy
       const dist = Math.sqrt(dx * dx + dy * dy)
       const nx = dx / dist, ny = dy / dist
-      const steps = Math.floor(dist / 14)
-      this.roadLayer.lineStyle(2, toPhaserColor(PALETTE.border), 0.7)
-      for (let s = 0; s < steps; s += 2) {
-        this.roadLayer.strokeLineShape(new Phaser.Geom.Line(
-          hx + nx * s * 14, hy + ny * s * 14,
-          hx + nx * (s + 1) * 14, hy + ny * (s + 1) * 14,
-        ))
+      const dash = 10, gap = 8
+      let pos = 0, draw = true
+      while (pos < dist) {
+        const seg = Math.min(draw ? dash : gap, dist - pos)
+        if (draw) {
+          this.roadLayer.lineStyle(1, color, 0.45)
+          this.roadLayer.strokeLineShape(new Phaser.Geom.Line(
+            hx + nx * pos,        hy + ny * pos,
+            hx + nx * (pos + seg), hy + ny * (pos + seg),
+          ))
+        }
+        pos += seg; draw = !draw
       }
     }
   }
 
   private drawTerritories(selectedId?: string) {
     const { width, height } = this.scale
+
     for (const t of TERRITORIES) {
-      const cx = t.cx * width, cy = t.cy * height
-      const isHub      = t.id === 'bnbchain'
-      const isSelected = t.id === selectedId
-      const tileSize   = isHub ? t.radius * 1.6 : t.radius * 1.4
-      const half       = tileSize / 2
-      const color      = toPhaserColor(t.color)
-      const bgColor    = toPhaserColor(isHub ? PALETTE.card2 : PALETTE.card)
+      const cx      = t.cx * width
+      const cy      = t.cy * height
+      const isHub   = t.id === 'bnbchain'
+      const isSel   = t.id === selectedId
+      const hexSize = isHub ? t.radius * 1.55 : t.radius * 1.35
+      const color   = toPhaserColor(t.color)
 
-      // Glow
-      const glow = this.add.arc(cx, cy, t.radius * 1.8, 0, 360)
-      glow.setFillStyle(color, 0.06).setDepth(1)
-      this.tileLayer.add(glow)
+      // ── Bloom glow layers ──
+      const bloom = this.add.arc(cx, cy, hexSize * 2.4, 0, 360)
+      bloom.setFillStyle(color, 0.035).setDepth(1)
+      this.tileLayer.add(bloom)
 
-      // Tile
-      const g = this.add.graphics().setDepth(2)
-      g.fillStyle(isSelected ? toPhaserColor(PALETTE.card2) : bgColor, 1)
-      g.fillRoundedRect(cx - half, cy - half, tileSize, tileSize, 10)
-      g.lineStyle(isSelected ? 2.5 : 1.5, color, isSelected ? 1 : 0.6)
-      g.strokeRoundedRect(cx - half, cy - half, tileSize, tileSize, 10)
-      g.fillStyle(color, 1)
-      g.fillRect(cx - half, cy - half, tileSize, 4)
+      const halo = this.add.arc(cx, cy, hexSize * 1.6, 0, 360)
+      halo.setFillStyle(color, isHub ? 0.10 : 0.07).setDepth(2)
+      this.tileLayer.add(halo)
+
+      // Hub outer orbit ring
+      if (isHub) {
+        const outerRing = this.add.arc(cx, cy, hexSize * 1.9, 0, 360)
+        outerRing.setStrokeStyle(1, color, 0.28).setFillStyle().setDepth(2)
+        this.tileLayer.add(outerRing)
+      }
+
+      // ── Hexagon body ──
+      const g         = this.add.graphics().setDepth(3)
+      const outerPts  = this.getHexPoints(cx, cy, hexSize)
+      const innerPts  = this.getHexPoints(cx, cy, hexSize * 0.82)
+
+      // Dark fill
+      g.fillStyle(toPhaserColor(isHub ? PALETTE.card2 : PALETTE.card), 0.96)
+      g.fillPoints(outerPts, true, true)
+
+      // Color tint wash
+      g.fillStyle(color, isHub ? 0.11 : 0.07)
+      g.fillPoints(innerPts, true, true)
+
+      // Hex border
+      g.lineStyle(isSel ? 2.5 : isHub ? 2.2 : 1.8, color, isSel ? 1 : isHub ? 0.9 : 0.70)
+      g.strokePoints(outerPts, true, true)
+
+      // Selected: extra inner ring
+      if (isSel) {
+        g.lineStyle(1, color, 0.45)
+        g.strokePoints(innerPts, true, true)
+      }
+
       this.tileLayer.add(g)
 
+      // ── Type badge ──
       this.tileLayer.add(
-        this.add.text(cx, cy - 10, t.icon, {
-          fontSize: isHub ? '22px' : '18px', align: 'center',
-        }).setOrigin(0.5).setDepth(3)
+        this.add.text(cx, cy - hexSize * 0.63, t.type, {
+          fontSize: '8px', color: t.color,
+          fontFamily: 'Inter, monospace',
+          backgroundColor: t.color + '22',
+          padding: { x: 5, y: 2 },
+        }).setOrigin(0.5, 0.5).setDepth(4)
       )
 
-      const displayName = t.name.length > 12 ? t.name.slice(0, 11) + '…' : t.name
+      // ── Icon ──
       this.tileLayer.add(
-        this.add.text(cx, cy + 7, displayName, {
+        this.add.text(cx, cy - 11, t.icon, {
+          fontSize: isHub ? '26px' : '21px', align: 'center',
+        }).setOrigin(0.5).setDepth(4)
+      )
+
+      // ── Name ──
+      const displayName = t.name.length > 13 ? t.name.slice(0, 12) + '…' : t.name
+      this.tileLayer.add(
+        this.add.text(cx, cy + 8, displayName, {
           fontSize: isHub ? '11px' : '10px',
           fontStyle: isHub ? 'bold' : 'normal',
-          color: t.color, fontFamily: 'Inter, sans-serif', align: 'center',
-        }).setOrigin(0.5, 0).setDepth(3)
+          color: t.color,
+          fontFamily: 'Inter, sans-serif',
+          align: 'center',
+        }).setOrigin(0.5, 0).setDepth(4)
       )
 
+      // ── Agent count ──
       const count = this._agents.filter(a => a.territory === t.id).length
       this.tileLayer.add(
-        this.add.text(cx, cy + 20, `${count} agents`, {
-          fontSize: '9px', color: PALETTE.muted, fontFamily: 'Inter, sans-serif',
-        }).setOrigin(0.5, 0).setDepth(3)
+        this.add.text(cx, cy + 21, `${count} agents`, {
+          fontSize: '9px', color: PALETTE.muted,
+          fontFamily: 'Inter, sans-serif',
+        }).setOrigin(0.5, 0).setDepth(4)
       )
 
-      this.tileLayer.add(
-        this.add.text(cx, cy - half + 8, t.type, {
-          fontSize: '9px', color: t.color, fontFamily: 'Inter, sans-serif',
-        }).setOrigin(0.5, 0.5).setDepth(3)
-      )
-
-      const hitZone = this.add.zone(cx, cy, tileSize, tileSize).setDepth(10)
+      // ── Click zone ──
+      const hitZone = this.add.zone(cx, cy, hexSize * 2, hexSize * 2).setDepth(10)
       hitZone.setInteractive({ useHandCursor: true })
       hitZone.on('pointerdown', () => {
         this._clickConsumed = true
