@@ -23,6 +23,8 @@ interface GardenState {
 
   // Actions — data
   setAgents: (agents: Agent[]) => void
+  /** Add a single agent discovered from ERC-8004 on-chain registration */
+  addAgent: (agent: Agent) => void
   updateAgent: (id: number, patch: Partial<Agent>) => void
   pushFeedEvent: (event: FeedEvent) => void
   incrementMessages: () => void
@@ -56,6 +58,13 @@ export const useGardenStore = create<GardenState>((set, get) => ({
   networkMode: 'mock',
 
   setAgents: (agents) => set({ agents }),
+
+  addAgent: (agent) =>
+    set(s => {
+      // Deduplicate by id — ERC-8004 poll may fire for the same registration twice
+      if (s.agents.some(a => a.id === agent.id)) return s
+      return { agents: [...s.agents, agent] }
+    }),
 
   updateAgent: (id, patch) =>
     set(s => ({ agents: s.agents.map(a => a.id === id ? { ...a, ...patch } : a) })),

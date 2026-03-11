@@ -45,7 +45,170 @@ const LISTA_HAY    = '0x0782b6d8c4551B9760e74c0545a9bCD90bdc41E5'
 /** LISTA governance token */
 const LISTA_TOKEN  = '0xFceB31A79F71AC9CBDCF853519c1b12D379EdC46'
 
+// ── ERC-8004 Identity Registry ────────────────────────────────────────────────
+
+/**
+ * BSC Mainnet address for BRC-8004 Identity Registry.
+ * Agents registered via BNBAgent SDK will emit ERC-721 Transfer(from=0x0) here.
+ */
+export const ERC8004_REGISTRY_MAINNET = '0xfA09B3397fAC75424422C4D28b1729E3D4f659D7'
+
+/**
+ * BSC Testnet address — update when BRC8004 deploys to Chapel.
+ * Set to empty string to disable ERC-8004 discovery on testnet.
+ */
+export const ERC8004_REGISTRY_TESTNET = ''
+
 // ── Event topics (keccak256 of signature) ─────────────────────────────────────
+
+// ERC-721 Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+// When from == address(0) this is a mint → new ERC-8004 agent registration
+const TOPIC_ERC721_TRANSFER = ethers.id('Transfer(address,address,uint256)')
+const ZERO_TOPIC            = '0x0000000000000000000000000000000000000000000000000000000000000000'
+
+// Minimal ABI for reading agentURI stored on the ERC-8004 contract
+const ERC8004_ABI = ['function tokenURI(uint256 tokenId) view returns (string)']
+
+// ── ERC-8004 types ────────────────────────────────────────────────────────────
+
+/** Parsed data returned by ERC8004Watcher for each newly registered agent */
+export interface ERC8004Agent {
+  agentId: number       // ERC-721 tokenId
+  ownerAddress: string  // wallet that called register()
+  name: string          // from agentURI JSON
+  territory: string     // from agentURI JSON → garden.territory (default: 'bnbchain')
+  description: string
+  agentURI: string      // raw data URI
+  txHash: string
+  blockNumber: number
+}
+
+export type ERC8004Callback = (agents: ERC8004Agent[]) => void
+
+// ── ERC8004Watcher class ──────────────────────────────────────────────────────
+
+/**
+ * Watches the ERC-8004 Identity Registry for new agent registrations.
+ * Any agent registered via BNBAgent SDK (or any ERC-8004 compatible tool)
+ * will be discovered and forwarded to the Garden store — no manual
+ * BNBGardenRegistry call required.
+ */
+export class ERC8004Watcher {
+  private provider: ethers.JsonRpcProvider
+  private contract: ethers.Contract
+  private registryAddress: string
+  private timer: ReturnType<typeof setInterval> | null = null
+  private lastBlock = 0
+  private cb: ERC8004Callback
+  private stopped = false
+
+  constructor(
+    provider: ethers.JsonRpcProvider,
+    callback: ERC8004Callback,
+    registryAddress: string = ERC8004_REGISTRY_MAINNET,
+  ) {
+    this.provider        = provider
+    this.cb              = callback
+    this.registryAddress = registryAddress
+    this.contract        = new ethers.Contract(registryAddress, ERC8004_ABI, provider)
+  }
+
+  async start() {
+    try {
+      this.lastBlock = await this.provider.getBlockNumber()
+      console.log(`[ERC8004Watcher] Watching ${this.registryAddress} from block ${this.lastBlock}`)
+    } catch {
+      this.lastBlock = 0
+    }
+    this._poll().catch(console.warn)
+    this.timer = setInterval(() => {
+      if (!this.stopped) this._poll().catch(console.warn)
+    }, POLL_INTERVAL)
+  }
+
+  stop() {
+    this.stopped = true
+    if (this.timer) { clearInterval(this.timer); this.timer = null }
+  }
+
+  private async _poll() {
+    try {
+      const latest = await this.provider.getBlockNumber()
+      if (this.lastBlock === 0) { this.lastBlock = latest - BLOCKS_PER_POLL }
+
+      const fromBlock = this.lastBlock + 1
+      const toBlock   = Math.min(latest, fromBlock + BLOCKS_PER_POLL - 1)
+      if (fromBlock > toBlock) return
+
+      // ERC-721 Transfer where from == address(0) → new mint = new agent registration
+      const logs = await this.provider.getLogs({
+        address: this.registryAddress,
+        topics: [TOPIC_ERC721_TRANSFER, ZERO_TOPIC],  // topics[1] = from = 0x0
+        fromBlock,
+        toBlock,
+      })
+
+      this.lastBlock = toBlock
+      if (logs.length === 0) return
+
+      console.log(`[ERC8004Watcher] ${logs.length} new agent(s) in blocks ${fromBlock}-${toBlock}`)
+
+      const newAgents: ERC8004Agent[] = []
+      for (const log of logs) {
+        try {
+          // ERC-721: topics[2]=to, topics[3]=tokenId
+          const ownerAddress = `0x${log.topics[2].slice(26)}`
+          const agentId      = Number(BigInt(log.topics[3]))
+
+          // Read agentURI from contract (data:application/json;base64,... or IPFS)
+          const agentURI: string = await this.contract.tokenURI(agentId)
+          const meta = _parseAgentURI(agentURI)
+
+          newAgents.push({
+            agentId,
+            ownerAddress,
+            name:        meta.name        ?? `Agent#${agentId}`,
+            territory:   meta.garden?.territory ?? 'bnbchain',
+            description: meta.description ?? '',
+            agentURI,
+            txHash:      log.transactionHash,
+            blockNumber: Number(log.blockNumber),
+          })
+        } catch (err) {
+          console.warn('[ERC8004Watcher] Failed to parse log:', (err as Error).message)
+        }
+      }
+
+      if (newAgents.length > 0) this.cb(newAgents)
+    } catch (err) {
+      console.warn('[ERC8004Watcher] Poll error:', (err as Error).message)
+    }
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Parse `data:application/json;base64,...` URI or plain JSON string.
+ * Returns {} on any error so callers can apply defaults safely.
+ */
+function _parseAgentURI(uri: string): Record<string, any> {
+  try {
+    if (uri.startsWith('data:application/json;base64,')) {
+      const b64  = uri.slice('data:application/json;base64,'.length)
+      // atob works in browsers; Buffer.from works in Node
+      const json = typeof atob !== 'undefined'
+        ? atob(b64)
+        : Buffer.from(b64, 'base64').toString('utf8')
+      return JSON.parse(json)
+    }
+    if (uri.startsWith('{')) return JSON.parse(uri)
+    // IPFS / HTTPS URIs can't be fetched synchronously; return empty
+    return {}
+  } catch {
+    return {}
+  }
+}
 
 // PancakeSwap V2: Swap(address indexed sender, uint amount0In, uint amount1In, uint amount0Out, uint amount1Out, address indexed to)
 const TOPIC_SWAP   = ethers.id('Swap(address,uint256,uint256,uint256,uint256,address)')
