@@ -186,10 +186,23 @@ export class ERC8004Watcher {
         const newAgents: ERC8004Agent[] = []
         for (const log of mintLogs) {
           try {
+            // topics[2] = to (new owner), topics[3] = tokenId (ERC-721 indexed)
+            // If tokenId is not indexed (ERC-20 style), fall back to log.data
             const ownerAddress = `0x${log.topics[2].slice(26)}`
-            const agentId      = Number(BigInt(log.topics[3]))
-            const agentURI: string = await this.contract.tokenURI(agentId)
-            const meta = _parseAgentURI(agentURI)
+            const agentId = log.topics[3] !== undefined
+              ? Number(BigInt(log.topics[3]))
+              : Number(BigInt(log.data))
+
+            // Try to fetch rich metadata from tokenURI — but never drop the
+            // agent if this call fails (access-controlled contract, wrong ABI,
+            // RPC auth error, etc.). Fall back to bare defaults instead.
+            let meta: Record<string, any> = {}
+            try {
+              const agentURI: string = await this.contract.tokenURI(agentId)
+              meta = _parseAgentURI(agentURI)
+            } catch (uriErr) {
+              console.warn(`[ERC8004Watcher] tokenURI(${agentId}) failed — using defaults:`, (uriErr as Error).message)
+            }
 
             newAgents.push({
               agentId,
@@ -197,7 +210,7 @@ export class ERC8004Watcher {
               name:        meta.name             ?? `Agent#${agentId}`,
               territory:   meta.garden?.territory ?? 'bnbchain',
               description: meta.description      ?? '',
-              agentURI,
+              agentURI:    meta._raw             ?? '',
               txHash:      log.transactionHash,
               blockNumber: Number(log.blockNumber),
             })
