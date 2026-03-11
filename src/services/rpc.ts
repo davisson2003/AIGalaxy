@@ -6,8 +6,6 @@ import { ethers } from 'ethers'
  * - MegaNode (NodeReal) can also be used by registering a free key at nodereal.io.
  */
 export const BSC_RPC_ENDPOINTS = [
-  // NodeReal MegaNode — free public key (shared, may be rate-limited)
-  'https://bsc-mainnet.nodereal.io/v1/64a9df0874fb4a93b9d0a3849de12d21',
   // Binance official public RPC
   'https://bsc-dataseed.binance.org/',
   'https://bsc-dataseed1.defibit.io/',
