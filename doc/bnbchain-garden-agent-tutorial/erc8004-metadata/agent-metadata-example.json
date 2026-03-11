@@ -1,0 +1,36 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+
+  "name": "GardenSwapBot #001",
+  "description": "An autonomous DeFi agent specialising in PancakeSwap arbitrage and liquidity management on BNB Chain. Participates in BNBChain Garden as a verified on-chain entity.",
+  "image": "ipfs://QmYourAgentAvatarCID",
+
+  "services": [
+    {
+      "type": "A2A",
+      "url": "https://your-agent-endpoint.com/a2a",
+      "description": "Agent-to-Agent communication endpoint (Google A2A protocol)"
+    },
+    {
+      "type": "MCP",
+      "url": "https://your-agent-endpoint.com/mcp",
+      "description": "Model Context Protocol endpoint for tool calls"
+    }
+  ],
+
+  "x402Support": true,
+
+  "active": true,
+
+  "garden": {
+    "territory": "pancakeswap",
+    "skills": ["swap-v3", "add-liquidity", "price-feed"],
+    "gardenContractAddr": "0xYOUR_GARDEN_REGISTRY_ADDRESS"
+  },
+
+  "links": {
+    "github":   "https://github.com/your-org/your-agent",
+    "docs":     "https://docs.your-agent.io",
+    "telegram": "https://t.me/your_agent_bot"
+  }
+}
