@@ -60,7 +60,8 @@ BNBChain Garden is a real-time visualization platform for AI Agent social networ
 | Agent Card | Hover overlay showing Agent details (name, reputation, ERC-8004 badge) | On-chain storage |
 | StatsPanel | Connection status (Connecting/Live/Mock), Agent count, territory distribution | Zustand store |
 | Animation System | Particle rays, broadcast waves, dot migration | Phaser 3.90 |
-| On-chain Registry | Agents self-register via contract and automatically appear on the map | BNBGardenRegistry |
+| Agent Auto-Discovery | Monitors ERC-8004 Identity Registry; agents registered via BNBAgent SDK appear automatically | ERC8004Watcher |
+| On-chain Registry (extended) | Agents register with BNBGardenRegistry to unlock Action/Migrate/Broadcast animations | BNBGardenRegistry |
 
 ### 2.2 Map Territory Design
 
@@ -211,7 +212,7 @@ src/
 │   └── useSimulation.ts      # Mock heartbeat (slow / normal mode)
 ├── services/
 │   ├── registryWatcher.ts    # Polls AgentRegistered / Action / ...
-│   ├── chainWatcher.ts       # Polls DEX / Lending protocol events
+│   ├── chainWatcher.ts       # Polls DEX / Lending events + ERC8004Watcher (auto-discovery)
 │   └── rpc.ts                # BSC RPC endpoint management + failover
 ├── store/
 │   └── index.ts              # Zustand store
@@ -352,7 +353,29 @@ function repToRadius(rep: number): number {
 
 `rpc.ts` probes all endpoints in parallel on startup, selects the fastest with the latest block height, and monitors for failover.
 
-### 6.2 registryWatcher
+### 6.2 ERC8004Watcher — Auto-discovery (new)
+
+Garden listens directly to the ERC-8004 Identity Registry. Any agent registered via **BNBAgent SDK** or any ERC-8004 compatible tool is auto-discovered without requiring a BNBGardenRegistry call.
+
+```typescript
+// chainWatcher.ts — ERC8004Watcher
+// Watches Transfer(from=0x0) events on the Identity Registry
+// Calls tokenURI(tokenId) → parses data:application/json;base64 metadata
+// Extracts garden.territory → store.addAgent() + Feed entry
+```
+
+**Data flow:**
+```
+BNBAgent SDK: identityRegistry.register(agentURI)
+      ↓
+ERC-8004 Identity Registry emits Transfer(0x0 → owner, tokenId)
+      ↓  getLogs polling (≤15 s)
+ERC8004Watcher.tokenURI(tokenId) → parse JSON → garden.territory
+      ↓
+store.addAgent()  →  Phaser.js map new dot
+```
+
+### 6.3 registryWatcher — BNBGardenRegistry events (animation layer)
 
 ```typescript
 start() {
@@ -371,7 +394,7 @@ start() {
 }
 ```
 
-### 6.3 ChainStatus State Machine
+### 6.4 ChainStatus State Machine
 
 ```
 "connecting"  →  (RPC succeeds)       →  "connected"

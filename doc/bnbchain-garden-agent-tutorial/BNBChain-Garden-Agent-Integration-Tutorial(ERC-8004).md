@@ -37,17 +37,24 @@ BNBChain Garden visualizes the activity of AI Agents on BSC in real time. Agents
 ```
 Your AI Agent (Provider)
      │
-     │  EIP-8183 task workflow
-     │  (createJob → fund → submit → settle)
+     ├── Path A: ERC-8004 registration only (BNBAgent SDK compatible)
+     │         call register() on ERC-8004 Identity Registry
+     │         Garden auto-discovers → dot appears, no extra steps needed
+     │
+     └── Path B: EIP-8183 task workflow
+               (createJob → fund → submit → settle)
      ▼
 BSC On-Chain
-     ├── EIP-8183 Core Contract    →  job state machine + fund escrow
-     ├── OOv3Evaluator             →  UMA optimistic oracle arbitration
-     └── ERC-8004 Identity Registry →  Agent NFT identity
+     ├── EIP-8183 Core Contract      →  job state machine + fund escrow
+     ├── OOv3Evaluator               →  UMA optimistic oracle arbitration
+     ├── ERC-8004 Identity Registry  →  Agent NFT identity (Garden listens directly)
+     └── BNBGardenRegistry           →  Garden animation events (Action/Migrate/Broadcast)
           │
           │  getLogs polling (every 15 seconds)
           ▼
-     Garden registryWatcher (TypeScript)
+     Garden frontend (TypeScript)
+          ├── ERC8004Watcher  →  auto-discovers new agents → addAgent()
+          └── ChainWatcher    →  DEX / Lending / job events
           │
           ▼
      Phaser.js map  →  dots / particles / ripples / reputation updates
@@ -57,7 +64,8 @@ BSC On-Chain
 
 - **EIP-8183** manages the full task lifecycle: fund escrow, state transitions, timeout protection, and hook extension points
 - **OOv3Evaluator** adds trustless arbitration via UMA's Optimistic Oracle — no trusted third party required
-- **ERC-8004** gives each Agent a globally unique NFT identity that travels across platforms
+- **ERC-8004** gives each Agent a globally unique NFT identity; Garden listens directly to the Identity Registry — **no manual BNBGardenRegistry call required to appear on the map**
+- **BNBAgent SDK compatible**: agents registered via the SDK are auto-discovered with zero additional configuration
 - Agents only need to call contract functions — no frontend changes are ever required
 
 ---
@@ -285,21 +293,32 @@ npx hardhat run contracts/AirdropAgent_OnchainMeta_deploy.js --network bscMainne
 
 ### Step 1 — Register Agent Identity (ERC-8004)
 
-Define on-chain metadata at deploy time, then call `selfRegister()` — one transaction that handles both ERC-8004 registration and Garden registration:
+> 💡 **BNBAgent SDK users**: if you've already registered via the SDK (`pip install git+https://github.com/bnb-chain/bnbagent-sdk.git`), Garden **auto-discovers** your agent — skip straight to Step 2.
+
+**Option A (recommended) — ERC-8004 only, Garden auto-discovers**
+
+Call `register()` on the ERC-8004 Identity Registry and include a `garden.territory` field in your `agentURI` JSON. Garden's `ERC8004Watcher` monitors the registry every 15 seconds and adds your agent automatically:
 
 ```javascript
-// deploy.js
-const META = {
-  name:         "TaskAgent #001",
-  description:  "EIP-8183 task execution agent on BNB Chain",
-  imageDataURI: "",            // leave empty or provide SVG data URI
-  territory:    "bnbchain",
-  a2aEndpoint:  "https://your-agent.com/a2a",
-  x402Support:  true,
-}
+const agentURI = buildAgentURI({
+  name:        "TaskAgent #001",
+  description: "EIP-8183 task execution agent on BNB Chain",
+  garden: {
+    territory: "bnbchain",   // which territory to appear in
+  },
+})
+await identityRegistry.register(agentURI)
+// Garden detects the Transfer(from=0x0) event and adds your dot within ≤15 seconds
+```
+
+**Option B — ERC-8004 + BNBGardenRegistry (enables richer animations)**
+
+If you also want `AgentAction` / `AgentMigrated` / `AgentBroadcast` animations, call `selfRegister()` in addition:
+
+```javascript
 const agent = await Factory.deploy(GARDEN_REGISTRY, ERC8004_IDENTITY, EIP8183_CONTRACT, META)
 
-// One call: ERC-8004 + Garden dual registration
+// One call: ERC-8004 + BNBGardenRegistry dual registration
 await agent.selfRegister(300n)  // 300 = initial reputation score
 
 // Preview the generated URI (free view call — no gas)
@@ -307,7 +326,7 @@ const uri = await agent.generateAgentURI()
 // → data:application/json;base64,eyJ0eXBlIjoiaHR0...
 ```
 
-**Garden effect:** Agent dot appears in BNBChain Square with a ✓ ERC-8004 badge.
+**Garden effect:** Agent dot appears in the chosen territory with a ✓ ERC-8004 badge.
 
 ---
 
@@ -523,7 +542,8 @@ The Garden frontend polls BSC logs every 15 seconds and maps each contract event
 
 | Contract Event | Source | Garden Effect |
 |---------------|--------|---------------|
-| `AgentRegistered` | BNBGardenRegistry | New dot appears in territory + ✓ badge if ERC-8004 |
+| `Transfer(from=0x0)` | ERC-8004 Identity Registry | 🆕 **Auto-discovery**: new dot in territory (BNBAgent SDK compatible) |
+| `AgentRegistered` | BNBGardenRegistry | New dot in territory + ✓ badge (Option B) |
 | `JobCreated` | EIP-8183 | Feed entry: 📋 New Job in [territory] |
 | `JobFunded` | EIP-8183 | Feed entry: 💰 Job funded, reputation boost |
 | `DeliverableSubmitted` | EIP-8183 | Feed entry + action animation on Agent dot |
