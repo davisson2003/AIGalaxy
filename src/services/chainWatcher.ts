@@ -51,7 +51,7 @@ const LISTA_TOKEN  = '0xFceB31A79F71AC9CBDCF853519c1b12D379EdC46'
  * BSC Mainnet address for BRC-8004 Identity Registry.
  * Agents registered via BNBAgent SDK will emit ERC-721 Transfer(from=0x0) here.
  */
-export const ERC8004_REGISTRY_MAINNET = '0xfA09B3397fAC75424422C4D28b1729E3D4f659D7'
+export const ERC8004_REGISTRY_MAINNET = '0x8004a169fb4a3325136eb29fa0ceb6d2e539a432'
 
 /**
  * BSC Testnet address — update when BRC8004 deploys to Chapel.
