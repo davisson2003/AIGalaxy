@@ -15,7 +15,7 @@ import { useEffect, useRef } from 'react'
 import { createBscProvider, type NetworkMode } from '@/services/rpc'
 import {
   ChainWatcher,    type ChainEvent,
-  ERC8004Watcher,  type ERC8004Agent,
+  ERC8004Watcher,  type ERC8004Agent, type ERC8004Interaction,
   ERC8004_REGISTRY_MAINNET, ERC8004_REGISTRY_TESTNET,
 } from '@/services/chainWatcher'
 import { TERRITORY_MAP } from '@/constants/territories'
@@ -168,7 +168,30 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
             }
           }
 
-          const erc8004Watcher = new ERC8004Watcher(provider, onNewAgents, registryAddress)
+          // Interaction callback: agent-to-agent Transfer events
+          const onInteractions = (interactions: ERC8004Interaction[]) => {
+            if (cancelled) return
+            for (const ix of interactions) {
+              // Try to look up the agent name from the store
+              const knownAgent = agentsRef.current.find(
+                a => a.tokenId === ix.agentId
+              )
+              const agentLabel = knownAgent ? knownAgent.name : `Agent#${ix.agentId}`
+              pushFeedEvent({
+                id:        ++_eventCounter,
+                type:      'activity',
+                timestamp: Date.now(),
+                label:     `🔀 ${agentLabel} transferred`,
+                color:     '#F0B90B',
+                territory: knownAgent?.territory ?? 'bnbchain',
+                txHash:    ix.txHash,
+              })
+              incrementActivities()
+              console.log(`[ERC8004] Interaction: Agent#${ix.agentId} ${ix.from} → ${ix.to}`)
+            }
+          }
+
+          const erc8004Watcher = new ERC8004Watcher(provider, onNewAgents, registryAddress, onInteractions)
           erc8004Ref.current = erc8004Watcher
           await erc8004Watcher.start()
         } else {

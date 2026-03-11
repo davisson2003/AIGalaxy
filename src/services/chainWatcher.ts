@@ -83,7 +83,17 @@ export interface ERC8004Agent {
   blockNumber: number
 }
 
-export type ERC8004Callback = (agents: ERC8004Agent[]) => void
+/** Agent-to-agent transfer / interaction event */
+export interface ERC8004Interaction {
+  agentId: number
+  from: string          // previous owner
+  to: string            // new owner
+  txHash: string
+  blockNumber: number
+}
+
+export type ERC8004Callback            = (agents: ERC8004Agent[]) => void
+export type ERC8004InteractionCallback = (interactions: ERC8004Interaction[]) => void
 
 // ── ERC8004Watcher class ──────────────────────────────────────────────────────
 
@@ -100,15 +110,18 @@ export class ERC8004Watcher {
   private timer: ReturnType<typeof setInterval> | null = null
   private lastBlock = 0
   private cb: ERC8004Callback
+  private interactionCb: ERC8004InteractionCallback | null = null
   private stopped = false
 
   constructor(
     provider: ethers.JsonRpcProvider,
     callback: ERC8004Callback,
     registryAddress: string = ERC8004_REGISTRY_MAINNET,
+    interactionCallback?: ERC8004InteractionCallback,
   ) {
     this.provider        = provider
     this.cb              = callback
+    this.interactionCb   = interactionCallback ?? null
     this.registryAddress = registryAddress
     this.contract        = new ethers.Contract(registryAddress, ERC8004_ABI, provider)
   }
@@ -143,46 +156,80 @@ export class ERC8004Watcher {
       const toBlock = latest
       if (fromBlock > toBlock) return
 
-      // ERC-721 Transfer where from == address(0) → new mint = new agent registration
-      const logs = await this.provider.getLogs({
-        address: this.registryAddress,
-        topics: [TOPIC_ERC721_TRANSFER, ZERO_TOPIC],  // topics[1] = from = 0x0
-        fromBlock,
-        toBlock,
-      })
+      // Fire both queries in parallel
+      const [mintResult, interactResult] = await Promise.allSettled([
+        // 1. Transfer(from=0x0) → new agent registration (mint)
+        this.provider.getLogs({
+          address: this.registryAddress,
+          topics: [TOPIC_ERC721_TRANSFER, ZERO_TOPIC],
+          fromBlock,
+          toBlock,
+        }),
+        // 2. Transfer(from≠0x0) → agent-to-agent interaction / ownership transfer
+        this.interactionCb
+          ? this.provider.getLogs({
+              address: this.registryAddress,
+              topics: [TOPIC_ERC721_TRANSFER, null, null],  // any from, any to
+              fromBlock,
+              toBlock,
+            })
+          : Promise.resolve([] as ethers.Log[]),
+      ])
 
       this.lastBlock = toBlock
-      if (logs.length === 0) return
 
-      console.log(`[ERC8004Watcher] ${logs.length} new agent(s) in blocks ${fromBlock}-${toBlock}`)
+      // ── New agent registrations ──────────────────────────────────────────────
+      if (mintResult.status === 'fulfilled' && mintResult.value.length > 0) {
+        const mintLogs = mintResult.value
+        console.log(`[ERC8004Watcher] ${mintLogs.length} new agent(s) in blocks ${fromBlock}-${toBlock}`)
 
-      const newAgents: ERC8004Agent[] = []
-      for (const log of logs) {
-        try {
-          // ERC-721: topics[2]=to, topics[3]=tokenId
-          const ownerAddress = `0x${log.topics[2].slice(26)}`
-          const agentId      = Number(BigInt(log.topics[3]))
+        const newAgents: ERC8004Agent[] = []
+        for (const log of mintLogs) {
+          try {
+            const ownerAddress = `0x${log.topics[2].slice(26)}`
+            const agentId      = Number(BigInt(log.topics[3]))
+            const agentURI: string = await this.contract.tokenURI(agentId)
+            const meta = _parseAgentURI(agentURI)
 
-          // Read agentURI from contract (data:application/json;base64,... or IPFS)
-          const agentURI: string = await this.contract.tokenURI(agentId)
-          const meta = _parseAgentURI(agentURI)
-
-          newAgents.push({
-            agentId,
-            ownerAddress,
-            name:        meta.name        ?? `Agent#${agentId}`,
-            territory:   meta.garden?.territory ?? 'bnbchain',
-            description: meta.description ?? '',
-            agentURI,
-            txHash:      log.transactionHash,
-            blockNumber: Number(log.blockNumber),
-          })
-        } catch (err) {
-          console.warn('[ERC8004Watcher] Failed to parse log:', (err as Error).message)
+            newAgents.push({
+              agentId,
+              ownerAddress,
+              name:        meta.name             ?? `Agent#${agentId}`,
+              territory:   meta.garden?.territory ?? 'bnbchain',
+              description: meta.description      ?? '',
+              agentURI,
+              txHash:      log.transactionHash,
+              blockNumber: Number(log.blockNumber),
+            })
+          } catch (err) {
+            console.warn('[ERC8004Watcher] Failed to parse mint log:', (err as Error).message)
+          }
         }
+        if (newAgents.length > 0) this.cb(newAgents)
       }
 
-      if (newAgents.length > 0) this.cb(newAgents)
+      // ── Agent-to-agent interactions ──────────────────────────────────────────
+      if (
+        this.interactionCb &&
+        interactResult.status === 'fulfilled' &&
+        interactResult.value.length > 0
+      ) {
+        // Filter out mints (from = 0x0) — already handled above
+        const interactLogs = interactResult.value.filter(
+          log => log.topics[1] !== ZERO_TOPIC
+        )
+        if (interactLogs.length > 0) {
+          console.log(`[ERC8004Watcher] ${interactLogs.length} agent interaction(s)`)
+          const interactions: ERC8004Interaction[] = interactLogs.map(log => ({
+            agentId:     Number(BigInt(log.topics[3])),
+            from:        `0x${log.topics[1].slice(26)}`,
+            to:          `0x${log.topics[2].slice(26)}`,
+            txHash:      log.transactionHash,
+            blockNumber: Number(log.blockNumber),
+          }))
+          this.interactionCb(interactions)
+        }
+      }
     } catch (err) {
       console.warn('[ERC8004Watcher] Poll error:', (err as Error).message)
     }
