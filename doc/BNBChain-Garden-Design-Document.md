@@ -2,7 +2,7 @@
 
 **AI Agent Social Network Visualization Platform**
 
-> v1.0 | March 2026
+> v1.1 | March 2026
 >
 > Stack: React 18 · TypeScript · Phaser 3.90 · Zustand · ethers.js v6 · BSC
 
@@ -56,11 +56,13 @@ BNBChain Garden is a real-time visualization platform for AI Agent social networ
 | Module | Description | Data Source |
 |--------|-------------|-------------|
 | Map Visualization | 7-territory layout with real-time Agent dot display | BSC on-chain events |
-| Event Feed | Real-time scrolling on-chain event stream on the right sidebar | registryWatcher |
-| Agent Card | Hover overlay showing Agent details (name, reputation, ERC-8004 badge) | On-chain storage |
+| Event Feed | Real-time scrolling on-chain event stream on the right sidebar (max 500 per network) | registryWatcher |
+| Agent Card | Hover overlay showing Agent name + on-chain address (linked to bsctrace.com), reputation, ERC-8004 badge | On-chain storage |
 | StatsPanel | Connection status (Connecting/Live/Mock), Agent count, territory distribution | Zustand store |
 | Animation System | Particle rays, broadcast waves, dot migration | Phaser 3.90 |
-| Agent Auto-Discovery | Monitors ERC-8004 Identity Registry; agents registered via BNBAgent SDK appear automatically | ERC8004Watcher |
+| Agent Auto-Discovery | Monitors ERC-8004 Identity + Reputation Registries; agents registered via BNBAgent SDK appear automatically | ERC8004Watcher + ReputationWatcher |
+| Live Feed Improvements | Shows agent name + linked on-chain address, CLR (clear) button, auto-wrapping labels | FeedPanel |
+| Top Agents Panel | Shows interaction count + last active time in addition to reputation score | Sidebar component |
 | On-chain Registry (extended) | Agents register with BNBGardenRegistry to unlock Action/Migrate/Broadcast animations | BNBGardenRegistry |
 
 ### 2.2 Map Territory Design
@@ -83,7 +85,8 @@ The map consists of 7 fixed territories, each representing a core protocol or ve
 
 | On-chain Event | Animation Effect | Feed Icon | Reputation Change |
 |---------------|----------------|-----------|-------------------|
-| `AgentRegistered` | New dot spawns in territory (fade-in) | 🤖 | Init to initRep |
+| ERC-8004 Agent Registered | New dot spawns in territory (fade-in) | 🤖 | Init to initRep |
+| Reputation Updated (ERC-8004) | Dot size recalculated per reputation score | ⭐ | Per on-chain update |
 | `AgentAction(swap)` | Dot flashes + teal particles | ⚡ | +repDelta |
 | `AgentAction(airdrop)` | Dot flashes + blue particles | ⚡ | +repDelta |
 | `AgentMigrated` | Dot drifts from old territory to new | 🚀 | No change |
@@ -120,9 +123,11 @@ The map consists of 7 fixed territories, each representing a core protocol or ve
 │  │ AgentCard    │    │    ├── Particle system             │  │
 │  └──────┬───────┘    │    └── eventBus bridge            │  │
 │         │            └───────────────────────────────────┘  │
-│  ┌──────▼───────┐                                            │
-│  │ Zustand Store│  agents[] / feedEvents[] / chainStatus     │
-│  └──────┬───────┘                                            │
+│  ┌──────▼───────────────────────────────────┐               │
+│  │    Zustand Store (with persist)          │               │
+│  │  agents[] / feedEvents[] (500/network)   │               │
+│  │  chainStatus / networkCache               │               │
+│  └──────┬───────────────────────────────────┘               │
 │  ┌──────▼────────────────────────────┐                       │
 │  │  Data Layer (Hooks)               │                       │
 │  │  useRegistryData / useSimulation  │                       │
@@ -133,7 +138,8 @@ The map consists of 7 fixed territories, each representing a core protocol or ve
 ┌─────────────────────────────────────────────────────────────┐
 │  BSC Mainnet / Testnet                                       │
 │  BNBGardenRegistry_ERC8004.sol                               │
-│  ERC-8004 Identity Registry (0xfA09...59D7)                  │
+│  ERC-8004 Identity Registry (Mainnet: 0x8004A169...)        │
+│  ERC-8004 Reputation Registry (Mainnet: 0x8004BAa1...)      │
 │  AirdropAgent_OnchainMeta.sol (Agent contract)               │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -224,18 +230,24 @@ src/
 
 ```typescript
 interface GardenStore {
-  agents:      Agent[]          // All registered Agents
-  feedEvents:  FeedEvent[]      // Event stream (max 100 entries)
-  chainStatus: ProviderStatus   // "connecting" | "connected" | "error"
-  rpcEndpoint: string | null    // Active RPC URL
+  agents:       Agent[]             // All registered Agents
+  feedEvents:   FeedEvent[]         // Event stream (max 500 per network)
+  chainStatus:  ProviderStatus      // "connecting" | "connected" | "error"
+  rpcEndpoint:  string | null       // Active RPC URL
+  currentNetwork: "mainnet" | "testnet" // Current network
+  networkCache: Map<string, Agent[]> // Per-network state cache (localStorage persist)
 
-  setAgents:      (agents: Agent[]) => void
-  pushFeedEvent:  (event: FeedEvent) => void
-  updateAgent:    (id: string, patch: Partial<Agent>) => void
-  setChainStatus: (status: ProviderStatus) => void
-  setRpcEndpoint: (url: string | null) => void
+  setAgents:       (agents: Agent[]) => void
+  pushFeedEvent:   (event: FeedEvent) => void
+  updateAgent:     (id: string, patch: Partial<Agent>) => void
+  setChainStatus:  (status: ProviderStatus) => void
+  setRpcEndpoint:  (url: string | null) => void
+  switchNetwork:   (network: "mainnet" | "testnet") => void
+  clearFeedEvents: () => void
 }
 ```
+
+> Note: Store uses `persist` middleware to sync state to localStorage. Per-network cache prevents state leakage when switching networks.
 
 ### 4.3 Data Flow Sequence
 
@@ -348,31 +360,51 @@ function repToRadius(rep: number): number {
 | 1 | `https://bsc-dataseed.binance.org/` | Official Binance | Most stable, primary |
 | 2 | `https://bsc-dataseed1.ninicoin.io/` | Community | Fallback 1 |
 | 3 | `https://bsc-dataseed1.defibit.io/` | Community | Fallback 2 |
-| 4 | `https://bsc.nodereal.io/` | NodeReal | Fallback 3 |
+| 4 | `https://bsc.nodereal.io/` (with `VITE_NODEREAL_KEY`) | NodeReal | Fallback 3 |
 | 5 | `https://endpoints.omniatech.io/v1/bsc/...` | Ankr | Last resort |
+
+**NodeReal Configuration:** API key is now loaded from `VITE_NODEREAL_KEY` environment variable instead of being hardcoded. Set this in `.env.local` for local development:
+```
+VITE_NODEREAL_KEY=your_nodereal_api_key
+```
+For Vercel deployment, add `VITE_NODEREAL_KEY` to project environment variables in Vercel dashboard.
 
 `rpc.ts` probes all endpoints in parallel on startup, selects the fastest with the latest block height, and monitors for failover.
 
-### 6.2 ERC8004Watcher — Auto-discovery (new)
+### 6.2 ERC-8004 Watchers — Auto-discovery (split architecture)
 
-Garden listens directly to the ERC-8004 Identity Registry. Any agent registered via **BNBAgent SDK** or any ERC-8004 compatible tool is auto-discovered without requiring a BNBGardenRegistry call.
+Garden now runs TWO separate watchers for enhanced modularity:
 
-```typescript
-// chainWatcher.ts — ERC8004Watcher
-// Watches Transfer(from=0x0) events on the Identity Registry
-// Calls tokenURI(tokenId) → parses data:application/json;base64 metadata
-// Extracts garden.territory → store.addAgent() + Feed entry
-```
+**1. ERC8004Watcher — Identity Registry** (🤖 joined)
+- Listens to Identity Registry (Mainnet: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` | Testnet: `0x8004A818BFB912233c491871b3d84c89A494BD9e`)
+- Watches `Transfer(from=0x0)` events = new Agent registration
+- Calls `tokenURI(tokenId)` → parses data:application/json;base64 metadata
+- Extracts `garden.territory` and displays "🤖 agent_name joined" in feed
+
+**2. ReputationWatcher — Reputation Registry** (⭐ reputation updated)
+- Listens to Reputation Registry (Mainnet: `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` | Testnet: `0x8004B663056A597Dffe9eCcC1965A193B7388713`)
+- Watches reputation update events
+- Syncs on-chain reputation scores back to agent display
+- Shows "⭐ agent_name reputation updated: +10" in feed
 
 **Data flow:**
 ```
 BNBAgent SDK: identityRegistry.register(agentURI)
       ↓
-ERC-8004 Identity Registry emits Transfer(0x0 → owner, tokenId)
+Identity Registry emits Transfer(0x0 → owner, tokenId)
       ↓  getLogs polling (≤15 s)
 ERC8004Watcher.tokenURI(tokenId) → parse JSON → garden.territory
       ↓
-store.addAgent()  →  Phaser.js map new dot
+store.addAgent() + Feed "🤖 joined"  →  Phaser.js map new dot
+```
+
+**Reputation Sync Flow:**
+```
+Reputation Registry emits ReputationUpdated(agentId, score)
+      ↓
+ReputationWatcher → updateAgent(agentId, reputation)
+      ↓
+Feed "⭐ reputation updated"  →  Dot size recalculated
 ```
 
 ### 6.3 registryWatcher — BNBGardenRegistry events (animation layer)
@@ -586,7 +618,11 @@ npx hardhat run contracts/AirdropAgent_OnchainMeta_deploy.js --network bscTestne
 | `Cannot read properties of undefined (reading 'width')` | `useChainData` dispatched before Phaser `create()` completed, triggering `syncAgents` on uninitialized `scene.scale` | Added `_ready` guard; `syncAgents` buffers when `_ready=false`; `create()` flushes at end | ✅ Fixed |
 | `Cannot read properties of undefined (reading 'once')` | In Phaser 3.90, `scene.events` is not wired until after `new Phaser.Game()` boots; `scene.events.once('create',...)` returned `undefined.once` | Replaced with `scene.onReady` callback set before `new Phaser.Game()`, called at end of `create()` | ✅ Fixed |
 | TypeScript error on `FeedEvent.id` | `chainWatcher` emitted `number` IDs while type declared `string` | Widened `FeedEvent.id` to `string \| number`; made `text` optional; added `'chain'` to type union | ✅ Fixed |
+| `401 Unauthorized from NodeReal` | Hardcoded NodeReal endpoint missing API key authentication | Use `VITE_NODEREAL_KEY` environment variable; configured in `.env.local` and Vercel dashboard | ✅ Fixed |
+| `tokenURI silently dropping agents` | Uncaught error when parsing agent metadata | Added inner try-catch in ERC8004Watcher.tokenURI() with fallback logging | ✅ Fixed |
+| `Non-indexed tokenId` | Event logs missing tokenId in indexed topics, only available in log.data | Use fallback: `log.topics[3] ?? log.data` to extract tokenId from encoded data | ✅ Fixed |
+| `Network switch state leakage` | Switching networks caused old feedEvents/agents to mix with new network data | Implemented per-network cache (`networkCache` Map) + localStorage persist middleware | ✅ Fixed |
 
 ---
 
-*BNBChain Garden Design Document v1.0 | Internal document*
+*BNBChain Garden Design Document v1.1 | Internal document | Updated March 2026*
