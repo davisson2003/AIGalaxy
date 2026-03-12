@@ -8,6 +8,10 @@ function timeAgo(ts: number) {
   return `${Math.floor(diff / 60000)}m`
 }
 
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
 function EventRow({ evt, index }: { evt: FeedEvent; index: number }) {
   const delay = Math.min(index * 0.03, 0.3)
   return (
@@ -47,17 +51,56 @@ function EventRow({ evt, index }: { evt: FeedEvent; index: number }) {
 
         {/* Content */}
         <div style={{ flex:1, minWidth:0 }}>
-          <p style={{
-            fontSize:11, color:'#C8D6F0', lineHeight:1.4,
-            margin:'0 0 3px', wordBreak:'break-word',
-          }}>
-            {evt.text}
-          </p>
+          {evt.text && (
+            <p style={{
+              fontSize:11, color:'#C8D6F0', lineHeight:1.4,
+              margin:'0 0 3px', wordBreak:'break-word',
+            }}>
+              {evt.text}
+            </p>
+          )}
+
+          {/* Address chip */}
+          {evt.address && (
+            <p className="hud-text-mono" style={{
+              fontSize:9, margin:'0 0 3px',
+              color: 'rgba(0,191,255,0.55)',
+              letterSpacing:'0.04em',
+            }}>
+              {evt.txHash ? (
+                <a
+                  href={`https://bscscan.com/address/${evt.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color:'inherit', textDecoration:'none' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#58A6FF')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(0,191,255,0.55)')}
+                >
+                  ⬡ {shortAddr(evt.address)}
+                </a>
+              ) : (
+                <>⬡ {shortAddr(evt.address)}</>
+              )}
+            </p>
+          )}
+
           <p className="hud-text-mono" style={{
             fontSize:9, color:'rgba(0,191,255,0.4)', margin:0,
             letterSpacing:'0.06em',
           }}>
             ◷ {timeAgo(evt.timestamp)}
+            {evt.txHash && (
+              <a
+                href={`https://bscscan.com/tx/${evt.txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color:'rgba(0,191,255,0.3)', textDecoration:'none', marginLeft:8 }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#58A6FF')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(0,191,255,0.3)')}
+              >
+                tx ↗
+              </a>
+            )}
           </p>
         </div>
       </div>

@@ -138,6 +138,7 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
                 color:     evt.color,
                 territory: evt.territory,
                 txHash:    evt.txHash,
+                address:   matchedAgent.tba,
               })
               incrementActivities()
               updateAgent(matchedAgent.id, {
@@ -183,6 +184,7 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
                 color:     gardenAgent.color,
                 territory: gardenAgent.territory,
                 txHash:    a.txHash,
+                address:   a.ownerAddress,
               })
               incrementActivities()
               console.log(`[ERC8004] New agent: ${gardenAgent.name} → ${gardenAgent.territory}`)
@@ -206,6 +208,7 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
                 color:     '#F0B90B',
                 territory: knownAgent?.territory ?? 'bnbchain',
                 txHash:    ix.txHash,
+                address:   ix.from,
               })
               incrementActivities()
               console.log(`[ERC8004] Interaction: Agent#${ix.agentId} ${ix.from} → ${ix.to}`)

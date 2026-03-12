@@ -74,6 +74,7 @@ export interface FeedEvent {
   timestamp: number
   territory?: string
   txHash?: string
+  address?: string   // on-chain address (tba / actor) for display
 }
 
 // ─── Social Graph ─────────────────────────────────────────────────────────────
