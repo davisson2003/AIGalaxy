@@ -15,9 +15,11 @@
 import { useEffect, useRef } from 'react'
 import { createBscProvider, type NetworkMode } from '@/services/rpc'
 import {
-  ChainWatcher,    type ChainEvent,
-  ERC8004Watcher,  type ERC8004Agent, type ERC8004Interaction,
-  ERC8004_REGISTRY_MAINNET, ERC8004_REGISTRY_TESTNET,
+  ChainWatcher,       type ChainEvent,
+  ERC8004Watcher,     type ERC8004Agent, type ERC8004Interaction,
+  ReputationWatcher,  type ReputationEvent,
+  ERC8004_IDENTITY_MAINNET, ERC8004_IDENTITY_TESTNET,
+  ERC8004_REPUTATION_MAINNET, ERC8004_REPUTATION_TESTNET,
 } from '@/services/chainWatcher'
 import { TERRITORY_MAP } from '@/constants/territories'
 import { useGardenStore } from '@/store'
@@ -69,8 +71,9 @@ function erc8004AgentToGardenAgent(a: ERC8004Agent): Agent {
  * @param networkMode  Which network to connect to. Re-runs the effect when changed.
  */
 export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet') {
-  const watcherRef      = useRef<ChainWatcher | null>(null)
-  const erc8004Refs     = useRef<ERC8004Watcher[]>([])
+  const watcherRef        = useRef<ChainWatcher | null>(null)
+  const identityRef       = useRef<ERC8004Watcher | null>(null)
+  const reputationRef     = useRef<ReputationWatcher | null>(null)
 
   const agents           = useGardenStore(s => s.agents)
   const agentsRef        = useRef(agents)
@@ -163,17 +166,16 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
         watcherRef.current = watcher
         await watcher.start()
 
-        // ── 2. ERC-8004 agent discovery (BNBAgent SDK compatible) ────────────
-        const registryAddresses = networkMode === 'testnet'
-          ? ERC8004_REGISTRY_TESTNET
-          : ERC8004_REGISTRY_MAINNET
+        // ── 2a. Identity Registry — new agent registrations ──────────────────
+        const identityAddress = networkMode === 'testnet'
+          ? ERC8004_IDENTITY_TESTNET
+          : ERC8004_IDENTITY_MAINNET
 
         const onNewAgents = (newAgents: ERC8004Agent[]) => {
           if (cancelled) return
           for (const a of newAgents) {
             const gardenAgent = erc8004AgentToGardenAgent(a)
             addAgent(gardenAgent)
-
             pushFeedEvent({
               id:        ++_eventCounter,
               type:      'activity',
@@ -209,16 +211,48 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
           }
         }
 
-        // Start one watcher per registry address in parallel
-        erc8004Refs.current = []
-        await Promise.all(
-          registryAddresses.map(async (addr) => {
-            const w = new ERC8004Watcher(provider, onNewAgents, addr, onInteractions)
-            erc8004Refs.current.push(w)
-            await w.start()
-            console.log(`[ERC8004] Watching registry ${addr}`)
-          })
-        )
+        identityRef.current = new ERC8004Watcher(provider, onNewAgents, identityAddress, onInteractions)
+        await identityRef.current.start()
+        console.log(`[ERC8004] Identity registry: ${identityAddress}`)
+
+        // ── 2b. Reputation Registry — on-chain reputation events ─────────────
+        const reputationAddress = networkMode === 'testnet'
+          ? ERC8004_REPUTATION_TESTNET
+          : ERC8004_REPUTATION_MAINNET
+
+        const onReputation = (events: ReputationEvent[]) => {
+          if (cancelled) return
+          for (const ev of events) {
+            // Find agent by tba address or tokenId
+            const knownAgent = agentsRef.current.find(
+              a => a.tba?.toLowerCase() === ev.agentAddress.toLowerCase()
+                || a.tokenId === ev.tokenId
+            )
+            if (knownAgent) {
+              // Boost reputation and surface in feed
+              updateAgent(knownAgent.id, {
+                reputation: Math.min(knownAgent.reputation + 5, 9999),
+                lastActive: Date.now(),
+              })
+              pushFeedEvent({
+                id:        ++_eventCounter,
+                type:      'chain',
+                timestamp: Date.now(),
+                label:     `⭐ ${knownAgent.name} reputation updated`,
+                color:     '#F0B90B',
+                territory: knownAgent.territory,
+                txHash:    ev.txHash,
+                address:   ev.agentAddress,
+              })
+              incrementActivities()
+            }
+            console.log(`[Reputation] Event for ${ev.agentAddress} tokenId=${ev.tokenId}`)
+          }
+        }
+
+        reputationRef.current = new ReputationWatcher(provider, onReputation, reputationAddress)
+        await reputationRef.current.start()
+        console.log(`[ERC8004] Reputation registry: ${reputationAddress}`)
 
       } catch (err) {
         if (cancelled) return
@@ -233,8 +267,10 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
       cancelled = true
       watcherRef.current?.stop()
       watcherRef.current = null
-      erc8004Refs.current.forEach(w => w.stop())
-      erc8004Refs.current = []
+      identityRef.current?.stop()
+      identityRef.current = null
+      reputationRef.current?.stop()
+      reputationRef.current = null
     }
   }, [enabled, networkMode]) // eslint-disable-line react-hooks/exhaustive-deps
 }

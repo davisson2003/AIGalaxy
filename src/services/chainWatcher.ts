@@ -45,24 +45,21 @@ const LISTA_HAY    = '0x0782b6d8c4551B9760e74c0545a9bCD90bdc41E5'
 /** LISTA governance token */
 const LISTA_TOKEN  = '0xFceB31A79F71AC9CBDCF853519c1b12D379EdC46'
 
-// ── ERC-8004 Identity Registry ────────────────────────────────────────────────
+// ── ERC-8004 Registry addresses ───────────────────────────────────────────────
 
-/**
- * BSC Mainnet addresses for ERC-8004 Identity Registry.
- * Multiple registry contracts are monitored in parallel.
- */
-export const ERC8004_REGISTRY_MAINNET = [
-  '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
-  '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63',
-]
+/** Identity Registry — ERC-721 mint (from=0x0) = new agent registration */
+export const ERC8004_IDENTITY_MAINNET = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
+export const ERC8004_IDENTITY_TESTNET = '0x8004A818BFB912233c491871b3d84c89A494BD9e'
 
-/**
- * BSC Testnet addresses for ERC-8004 Identity Registry.
- */
-export const ERC8004_REGISTRY_TESTNET = [
-  '0x8004A818BFB912233c491871b3d84c89A494BD9e',
-  '0x8004B663056A597Dffe9eCcC1965A193B7388713',
-]
+/** Reputation Registry — tracks on-chain reputation scores for agents */
+export const ERC8004_REPUTATION_MAINNET = '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63'
+export const ERC8004_REPUTATION_TESTNET = '0x8004B663056A597Dffe9eCcC1965A193B7388713'
+
+// Legacy aliases kept for backwards-compatibility
+/** @deprecated Use ERC8004_IDENTITY_MAINNET */
+export const ERC8004_REGISTRY_MAINNET = [ERC8004_IDENTITY_MAINNET, ERC8004_REPUTATION_MAINNET]
+/** @deprecated Use ERC8004_IDENTITY_TESTNET */
+export const ERC8004_REGISTRY_TESTNET = [ERC8004_IDENTITY_TESTNET, ERC8004_REPUTATION_TESTNET]
 
 // ── Event topics (keccak256 of signature) ─────────────────────────────────────
 
@@ -99,6 +96,18 @@ export interface ERC8004Interaction {
 
 export type ERC8004Callback            = (agents: ERC8004Agent[]) => void
 export type ERC8004InteractionCallback = (interactions: ERC8004Interaction[]) => void
+
+// ── ERC-8004 Reputation Registry types ───────────────────────────────────────
+
+/** A reputation event emitted by the Reputation Registry */
+export interface ReputationEvent {
+  agentAddress: string   // the agent whose reputation changed
+  tokenId: number        // ERC-721 token id (if available)
+  txHash: string
+  blockNumber: number
+}
+
+export type ReputationCallback = (events: ReputationEvent[]) => void
 
 // ── ERC8004Watcher class ──────────────────────────────────────────────────────
 
@@ -250,6 +259,95 @@ export class ERC8004Watcher {
       }
     } catch (err) {
       console.warn('[ERC8004Watcher] Poll error:', (err as Error).message)
+    }
+  }
+}
+
+// ── ReputationWatcher class ───────────────────────────────────────────────────
+
+/**
+ * Watches the ERC-8004 Reputation Registry for on-chain reputation events.
+ * Listens for Transfer events (ERC-721) which represent reputation score changes.
+ * Any event from this contract triggers a reputation update for the involved agent.
+ */
+export class ReputationWatcher {
+  private provider: ethers.JsonRpcProvider
+  private registryAddress: string
+  private timer: ReturnType<typeof setInterval> | null = null
+  private lastBlock = 0
+  private cb: ReputationCallback
+  private stopped = false
+
+  constructor(
+    provider: ethers.JsonRpcProvider,
+    callback: ReputationCallback,
+    registryAddress: string = ERC8004_REPUTATION_MAINNET,
+  ) {
+    this.provider        = provider
+    this.cb              = callback
+    this.registryAddress = registryAddress
+  }
+
+  async start() {
+    try {
+      this.lastBlock = await this.provider.getBlockNumber()
+      console.log(`[ReputationWatcher] Watching ${this.registryAddress} from block ${this.lastBlock}`)
+    } catch {
+      this.lastBlock = 0
+    }
+    this._poll().catch(console.warn)
+    this.timer = setInterval(() => {
+      if (!this.stopped) this._poll().catch(console.warn)
+    }, POLL_INTERVAL)
+  }
+
+  stop() {
+    this.stopped = true
+    if (this.timer) { clearInterval(this.timer); this.timer = null }
+  }
+
+  private async _poll() {
+    try {
+      const latest = await this.provider.getBlockNumber()
+      if (this.lastBlock === 0) { this.lastBlock = latest - BLOCKS_PER_POLL }
+
+      const fromBlock = this.lastBlock + 1
+      const toBlock   = latest
+      if (fromBlock > toBlock) return
+
+      // Listen for all Transfer events from the reputation registry
+      const logs = await this.provider.getLogs({
+        address:   this.registryAddress,
+        topics:    [TOPIC_ERC721_TRANSFER],
+        fromBlock,
+        toBlock,
+      })
+
+      this.lastBlock = toBlock
+
+      if (logs.length === 0) return
+
+      console.log(`[ReputationWatcher] ${logs.length} reputation event(s) in blocks ${fromBlock}-${toBlock}`)
+
+      const events: ReputationEvent[] = logs.map(log => {
+        // topics[2] = to (recipient / agent receiving reputation)
+        const agentAddress = log.topics[2]
+          ? `0x${log.topics[2].slice(26)}`
+          : '0x0000000000000000000000000000000000000000'
+        const tokenId = log.topics[3] !== undefined
+          ? Number(BigInt(log.topics[3]))
+          : Number(BigInt(log.data === '0x' ? '0x0' : log.data))
+        return {
+          agentAddress,
+          tokenId,
+          txHash:      log.transactionHash,
+          blockNumber: Number(log.blockNumber),
+        }
+      })
+
+      this.cb(events)
+    } catch (err) {
+      console.warn('[ReputationWatcher] Poll error:', (err as Error).message)
     }
   }
 }
