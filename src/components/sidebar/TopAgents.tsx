@@ -11,6 +11,15 @@ const TERRITORY_COLORS: Record<string, string> = {
   'aster':       '#F87171',
 }
 
+function formatLastActive(ts: number): string {
+  if (!ts) return '—'
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 60)   return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
 export default function TopAgents() {
   const agents = useGardenStore(s => s.agents)
   const selectAgent = useGardenStore(s => s.selectAgent)
@@ -75,13 +84,16 @@ export default function TopAgents() {
                 boxShadow: `0 0 6px ${color}, 0 0 12px ${color}60`,
               }}/>
 
-              {/* Name + territory */}
+              {/* Name + territory + last active */}
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ fontSize:11, color:'#D8E6FF', fontWeight:600, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                   {agent.name}
                 </p>
                 <p style={{ fontSize:9, color:'rgba(130,155,185,0.55)', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                   {territory?.name ?? agent.territory}
+                </p>
+                <p style={{ fontSize:9, color:'rgba(100,140,100,0.7)', margin:'1px 0 0', fontFamily:'monospace' }}>
+                  ⚡ {agent.interactions ?? 0} &nbsp;·&nbsp; {formatLastActive(agent.lastActive)}
                 </p>
               </div>
 
