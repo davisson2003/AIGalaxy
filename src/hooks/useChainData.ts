@@ -70,7 +70,7 @@ function erc8004AgentToGardenAgent(a: ERC8004Agent): Agent {
  */
 export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet') {
   const watcherRef      = useRef<ChainWatcher | null>(null)
-  const erc8004Ref      = useRef<ERC8004Watcher | null>(null)
+  const erc8004Refs     = useRef<ERC8004Watcher[]>([])
 
   const agents           = useGardenStore(s => s.agents)
   const agentsRef        = useRef(agents)
@@ -164,63 +164,61 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
         await watcher.start()
 
         // ── 2. ERC-8004 agent discovery (BNBAgent SDK compatible) ────────────
-        const registryAddress = networkMode === 'testnet'
+        const registryAddresses = networkMode === 'testnet'
           ? ERC8004_REGISTRY_TESTNET
           : ERC8004_REGISTRY_MAINNET
 
-        if (registryAddress) {
-          const onNewAgents = (newAgents: ERC8004Agent[]) => {
-            if (cancelled) return
-            for (const a of newAgents) {
-              const gardenAgent = erc8004AgentToGardenAgent(a)
-              addAgent(gardenAgent)
+        const onNewAgents = (newAgents: ERC8004Agent[]) => {
+          if (cancelled) return
+          for (const a of newAgents) {
+            const gardenAgent = erc8004AgentToGardenAgent(a)
+            addAgent(gardenAgent)
 
-              // Feed entry for the new registration
-              pushFeedEvent({
-                id:        ++_eventCounter,
-                type:      'activity',
-                timestamp: Date.now(),
-                label:     `🤖 ${gardenAgent.name} joined via ERC-8004`,
-                color:     gardenAgent.color,
-                territory: gardenAgent.territory,
-                txHash:    a.txHash,
-                address:   a.ownerAddress,
-              })
-              incrementActivities()
-              console.log(`[ERC8004] New agent: ${gardenAgent.name} → ${gardenAgent.territory}`)
-            }
+            pushFeedEvent({
+              id:        ++_eventCounter,
+              type:      'activity',
+              timestamp: Date.now(),
+              label:     `🤖 ${gardenAgent.name} joined via ERC-8004`,
+              color:     gardenAgent.color,
+              territory: gardenAgent.territory,
+              txHash:    a.txHash,
+              address:   a.ownerAddress,
+            })
+            incrementActivities()
+            console.log(`[ERC8004] New agent: ${gardenAgent.name} → ${gardenAgent.territory}`)
           }
-
-          // Interaction callback: agent-to-agent Transfer events
-          const onInteractions = (interactions: ERC8004Interaction[]) => {
-            if (cancelled) return
-            for (const ix of interactions) {
-              // Try to look up the agent name from the store
-              const knownAgent = agentsRef.current.find(
-                a => a.tokenId === ix.agentId
-              )
-              const agentLabel = knownAgent ? knownAgent.name : `Agent#${ix.agentId}`
-              pushFeedEvent({
-                id:        ++_eventCounter,
-                type:      'activity',
-                timestamp: Date.now(),
-                label:     `🔀 ${agentLabel} transferred`,
-                color:     '#F0B90B',
-                territory: knownAgent?.territory ?? 'bnbchain',
-                txHash:    ix.txHash,
-                address:   ix.from,
-              })
-              incrementActivities()
-              console.log(`[ERC8004] Interaction: Agent#${ix.agentId} ${ix.from} → ${ix.to}`)
-            }
-          }
-
-          const erc8004Watcher = new ERC8004Watcher(provider, onNewAgents, registryAddress, onInteractions)
-          erc8004Ref.current = erc8004Watcher
-          await erc8004Watcher.start()
-        } else {
-          console.log('[useChainData] ERC-8004 registry not configured for testnet, skipping discovery')
         }
+
+        const onInteractions = (interactions: ERC8004Interaction[]) => {
+          if (cancelled) return
+          for (const ix of interactions) {
+            const knownAgent = agentsRef.current.find(a => a.tokenId === ix.agentId)
+            const agentLabel = knownAgent ? knownAgent.name : `Agent#${ix.agentId}`
+            pushFeedEvent({
+              id:        ++_eventCounter,
+              type:      'activity',
+              timestamp: Date.now(),
+              label:     `🔀 ${agentLabel} transferred`,
+              color:     '#F0B90B',
+              territory: knownAgent?.territory ?? 'bnbchain',
+              txHash:    ix.txHash,
+              address:   ix.from,
+            })
+            incrementActivities()
+            console.log(`[ERC8004] Interaction: Agent#${ix.agentId} ${ix.from} → ${ix.to}`)
+          }
+        }
+
+        // Start one watcher per registry address in parallel
+        erc8004Refs.current = []
+        await Promise.all(
+          registryAddresses.map(async (addr) => {
+            const w = new ERC8004Watcher(provider, onNewAgents, addr, onInteractions)
+            erc8004Refs.current.push(w)
+            await w.start()
+            console.log(`[ERC8004] Watching registry ${addr}`)
+          })
+        )
 
       } catch (err) {
         if (cancelled) return
@@ -235,8 +233,8 @@ export function useChainData(enabled = true, networkMode: NetworkMode = 'mainnet
       cancelled = true
       watcherRef.current?.stop()
       watcherRef.current = null
-      erc8004Ref.current?.stop()
-      erc8004Ref.current = null
+      erc8004Refs.current.forEach(w => w.stop())
+      erc8004Refs.current = []
     }
   }, [enabled, networkMode]) // eslint-disable-line react-hooks/exhaustive-deps
 }

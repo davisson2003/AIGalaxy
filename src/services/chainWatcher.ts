@@ -48,16 +48,21 @@ const LISTA_TOKEN  = '0xFceB31A79F71AC9CBDCF853519c1b12D379EdC46'
 // ── ERC-8004 Identity Registry ────────────────────────────────────────────────
 
 /**
- * BSC Mainnet address for BRC-8004 Identity Registry.
- * Agents registered via BNBAgent SDK will emit ERC-721 Transfer(from=0x0) here.
+ * BSC Mainnet addresses for ERC-8004 Identity Registry.
+ * Multiple registry contracts are monitored in parallel.
  */
-export const ERC8004_REGISTRY_MAINNET = '0x8004a169fb4a3325136eb29fa0ceb6d2e539a432'
+export const ERC8004_REGISTRY_MAINNET = [
+  '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
+  '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63',
+]
 
 /**
- * BSC Testnet address — update when BRC8004 deploys to Chapel.
- * Set to empty string to disable ERC-8004 discovery on testnet.
+ * BSC Testnet addresses for ERC-8004 Identity Registry.
  */
-export const ERC8004_REGISTRY_TESTNET = ''
+export const ERC8004_REGISTRY_TESTNET = [
+  '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+  '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+]
 
 // ── Event topics (keccak256 of signature) ─────────────────────────────────────
 
@@ -116,7 +121,7 @@ export class ERC8004Watcher {
   constructor(
     provider: ethers.JsonRpcProvider,
     callback: ERC8004Callback,
-    registryAddress: string = ERC8004_REGISTRY_MAINNET,
+    registryAddress: string = ERC8004_REGISTRY_MAINNET[0],
     interactionCallback?: ERC8004InteractionCallback,
   ) {
     this.provider        = provider
