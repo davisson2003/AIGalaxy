@@ -106,7 +106,8 @@ function EventRow({ evt, index }: { evt: FeedEvent; index: number }) {
 }
 
 export default function EventFeed() {
-  const feedEvents = useGardenStore(s => s.feedEvents)
+  const feedEvents     = useGardenStore(s => s.feedEvents)
+  const clearFeedEvents = useGardenStore(s => s.clearFeedEvents)
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
@@ -119,16 +120,47 @@ export default function EventFeed() {
         display:'flex', alignItems:'center', justifyContent:'space-between',
       }}>
         <span className="hud-section-label">◈ LIVE FEED</span>
-        {feedEvents.length > 0 && (
-          <span className="hud-text-mono" style={{
-            fontSize:9, color:'rgba(0,255,148,0.6)',
-            background:'rgba(0,255,148,0.08)',
-            border:'1px solid rgba(0,255,148,0.2)',
-            padding:'1px 6px', borderRadius:2,
-          }}>
-            {feedEvents.length}
-          </span>
-        )}
+
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          {feedEvents.length > 0 && (
+            <span className="hud-text-mono" style={{
+              fontSize:9, color:'rgba(0,255,148,0.6)',
+              background:'rgba(0,255,148,0.08)',
+              border:'1px solid rgba(0,255,148,0.2)',
+              padding:'1px 6px', borderRadius:2,
+            }}>
+              {feedEvents.length}
+            </span>
+          )}
+          {feedEvents.length > 0 && (
+            <button
+              onClick={clearFeedEvents}
+              className="hud-text-mono"
+              title="Clear all feed events"
+              style={{
+                fontSize:8, fontWeight:700,
+                padding:'1px 6px', borderRadius:2,
+                background:'rgba(255,80,80,0.08)',
+                border:'1px solid rgba(255,80,80,0.25)',
+                color:'rgba(255,100,100,0.7)',
+                cursor:'pointer', letterSpacing:'0.08em',
+                transition:'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255,80,80,0.18)'
+                e.currentTarget.style.color = '#FF6464'
+                e.currentTarget.style.borderColor = 'rgba(255,80,80,0.5)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255,80,80,0.08)'
+                e.currentTarget.style.color = 'rgba(255,100,100,0.7)'
+                e.currentTarget.style.borderColor = 'rgba(255,80,80,0.25)'
+              }}
+            >
+              CLR
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Events list */}

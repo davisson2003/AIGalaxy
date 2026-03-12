@@ -48,6 +48,7 @@ interface GardenState {
   addAgent: (agent: Agent) => void
   updateAgent: (id: number, patch: Partial<Agent>) => void
   pushFeedEvent: (event: FeedEvent) => void
+  clearFeedEvents: () => void
   incrementMessages: () => void
   incrementActivities: () => void
 
@@ -104,6 +105,8 @@ export const useGardenStore = create<GardenState>()(
 
       pushFeedEvent: (event) =>
         set(s => ({ feedEvents: [event, ...s.feedEvents].slice(0, MAX_FEED_EVENTS) })),
+
+      clearFeedEvents: () => set({ feedEvents: [] }),
 
       incrementMessages:   () => set(s => ({ totalMessages:   s.totalMessages   + 1 })),
       incrementActivities: () => set(s => ({ totalActivities: s.totalActivities + 1 })),
