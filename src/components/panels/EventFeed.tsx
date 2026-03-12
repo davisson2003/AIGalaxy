@@ -67,7 +67,7 @@ function EventRow({ evt, index }: { evt: FeedEvent; index: number }) {
               letterSpacing:'0.04em',
             }}>
               <a
-                href={`https://bscscan.com/address/${evt.address}`}
+                href={`https://bsctrace.com/address/${evt.address}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ color:'inherit', textDecoration:'none' }}
@@ -88,7 +88,7 @@ function EventRow({ evt, index }: { evt: FeedEvent; index: number }) {
 
           {evt.txHash && (
             <a
-              href={`https://bscscan.com/tx/${evt.txHash}`}
+              href={`https://bsctrace.com/tx/${evt.txHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="hud-text-mono"
