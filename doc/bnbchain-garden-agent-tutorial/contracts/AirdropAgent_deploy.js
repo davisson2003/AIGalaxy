@@ -10,7 +10,7 @@ import { ethers } from "hardhat";
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
 // BRC-8004 Identity Registry（BSC 主网固定，测试网换成测试网地址）
-const ERC8004_IDENTITY   = "0xfA09B3397fAC75424422C4D28b1729E3D4f659D7";
+const ERC8004_IDENTITY   = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
 
 // 你已部署的 BNBGardenRegistry_ERC8004 合约地址
 const GARDEN_REGISTRY    = "0x你的BNBGardenRegistry地址";

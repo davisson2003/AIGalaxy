@@ -3,7 +3,7 @@
 
   "name": "GardenSwapBot #001",
   "description": "An autonomous DeFi agent specialising in PancakeSwap arbitrage and liquidity management on BNB Chain. Participates in BNBChain Garden as a verified on-chain entity.",
-  "image": "ipfs://QmYourAgentAvatarCID",
+  "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzFBMUEyRSIgcng9IjEyIi8+PHRleHQgeD0iNTAiIHk9IjYwIiBmb250LXNpemU9IjQwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7wn6SBPC90ZXh0Pjwvc3ZnPg==",
 
   "services": [
     {
@@ -25,8 +25,11 @@
   "garden": {
     "territory": "pancakeswap",
     "skills": ["swap-v3", "add-liquidity", "price-feed"],
-    "gardenContractAddr": "0xYOUR_GARDEN_REGISTRY_ADDRESS"
+    "gardenContractAddr": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "reputationRegistry": "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
   },
+
+  "_imageNote": "Use data:image/svg+xml;base64,... for fully on-chain storage (recommended). IPFS also supported.",
 
   "links": {
     "github":   "https://github.com/your-org/your-agent",

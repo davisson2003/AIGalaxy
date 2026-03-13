@@ -6,10 +6,10 @@ pragma solidity ^0.8.24;
  * @notice 在原版 BNBGardenRegistry 基础上接入 ERC-8004（BRC-8004）三大注册表：
  *
  *  ┌─────────────────────────────────────────────────────────────────┐
- *  │  ERC-8004 Identity Registry   (BSC Mainnet 0xfA09...59D7)      │
+ *  │  ERC-8004 Identity Registry   (BSC Mainnet 0x8004A169...a432)   │
  *  │    ↳ Agent NFT（ERC-721），全球唯一 agentId                      │
  *  ├─────────────────────────────────────────────────────────────────┤
- *  │  ERC-8004 Reputation Registry                                   │
+ *  │  ERC-8004 Reputation Registry (0x8004BAa17C55...9dE9b63)        │
  *  │    ↳ 标准化声誉反馈（+1/-1 打分）                                │
  *  ├─────────────────────────────────────────────────────────────────┤
  *  │  ERC-8004 Validation Registry                                   │
@@ -27,7 +27,7 @@ pragma solidity ^0.8.24;
 // ── ERC-8004 接口 ─────────────────────────────────────────────────────────────
 
 /**
- * @dev ERC-8004 Identity Registry — BSC mainnet: 0xfA09B3397fAC75424422C4D28b1729E3D4f659D7
+ * @dev ERC-8004 Identity Registry — BSC mainnet: 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432
  *      register() 返回 agentId（uint256，同时也是 ERC-721 tokenId）
  */
 interface IERC8004IdentityRegistry {
@@ -81,7 +81,7 @@ contract BNBGardenRegistry {
 
     /// @dev BRC-8004 Identity Registry — BSC Mainnet
     address public constant ERC8004_IDENTITY_BSC_MAINNET =
-        0xfA09B3397fAC75424422C4D28b1729E3D4f659D7;
+        0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
 
     /// @dev 可以在部署时配置（方便测试网切换）
     IERC8004IdentityRegistry public immutable identityRegistry;

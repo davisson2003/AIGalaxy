@@ -23,7 +23,7 @@ load_dotenv()
 # ─── 配置 ────────────────────────────────────────────────────────────────────
 
 BSC_RPC          = "https://bsc-dataseed.binance.org/"
-ERC8004_IDENTITY = Web3.to_checksum_address("0xfA09B3397fAC75424422C4D28b1729E3D4f659D7")
+ERC8004_IDENTITY = Web3.to_checksum_address("0x8004A169FB4a3325136EB29fA0ceB6D2e539a432")
 GARDEN_REGISTRY  = Web3.to_checksum_address(os.environ["GARDEN_REGISTRY"])
 AIRDROP_TOKEN    = Web3.to_checksum_address(os.environ["AIRDROP_TOKEN"])
 

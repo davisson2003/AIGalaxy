@@ -14,7 +14,7 @@ import { ethers } from "hardhat";
 
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
-const ERC8004_IDENTITY  = "0xfA09B3397fAC75424422C4D28b1729E3D4f659D7";
+const ERC8004_IDENTITY  = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
 const GARDEN_REGISTRY   = "0x你的BNBGardenRegistry地址";
 const AIRDROP_TOKEN     = "0x你的BEP20代币地址";
 
