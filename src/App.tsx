@@ -72,10 +72,12 @@ function DataDriver() {
   useChainData(networkMode !== 'mock', networkMode)
 
   // Run mock simulation:
-  //  - always in mock mode or while connecting/errored (sole data source)
-  //  - at reduced rate while live-connected (background heartbeat only)
+  //  - always in mock mode (sole data source)
+  //  - while connecting/errored on mainnet/testnet (temporary fallback)
+  //  - completely disabled once live-connected to a real network
   const isMock = networkMode === 'mock'
-  useSimulation(isMock || chainStatus !== 'connected', !isMock && chainStatus === 'connected')
+  const simEnabled = isMock || chainStatus !== 'connected'
+  useSimulation(simEnabled, false)
 
   return null
 }
